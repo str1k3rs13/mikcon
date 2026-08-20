@@ -29,10 +29,18 @@ export function linuxMachineIdFrom(files) {
   return "";
 }
 
+export function machineIdFromEnv(raw) {
+  const hex = String(raw == null ? "" : raw).trim().toLowerCase().replace(/-/g, "");
+  if (/^[0-9a-f]{32,}$/.test(hex) && !/^0+$/.test(hex.slice(0, 32))) return hex.slice(0, 32);
+  return parseLinuxMachineId(raw);
+}
+
 const LINUX_ID_FILES = ["/etc/machine-id", "/var/lib/dbus/machine-id"];
 
 export function machineId() {
   return new Promise((resolve) => {
+    const envId = machineIdFromEnv(process.env.MIKCON_MACHINE_ID || process.env.BALENA_DEVICE_UUID || "");
+    if (envId) return resolve({ id: envId });
     if (process.platform === "linux") return resolve({ id: linuxMachineIdFrom(LINUX_ID_FILES) });
     if (process.platform !== "win32") return resolve({ id: "" });
     // Fixed argv — no user input interpolated into the command.

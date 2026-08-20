@@ -49,11 +49,26 @@ Leave that window open. Open the printed URL.
 
 ---
 
-## Linux, Raspberry Pi, Orange Pi
+## Raspberry Pi and Orange Pi (Balena Etcher)
 
-64-bit Raspberry Pi OS or Ubuntu on the Pi / Orange Pi. Skip Pi Zero / Pi 1.
+Flash, boot, set the password. That is the whole install.
 
-**One command** (installs Node 22 if needed, then starts):
+1. Download the image from **[Releases](https://github.com/str1k3rs13/mikcon/releases)**
+   - Raspberry Pi 3 / 4 / 5: **mikcon-raspberrypi-arm64.img.xz**
+   - Orange Pi 5: **mikcon-orangepi5-arm64.img.xz**
+2. Open [Balena Etcher](https://etcher.balena.io) and flash it to an 8 GB+ microSD
+3. Optional Wi-Fi: plug the card back into the PC, edit `mikcon-wifi.txt` on the boot drive (`ssid=` and `psk=`), eject
+4. Boot the board
+5. On a phone on the same Wi-Fi open **http://mikcon.local:8787** or **http://BOARD-IP:8787**
+6. Login **1234**, then type your new password
+
+HDMI shows the same URL. Each flash is a new machine for the license — do not clone a running card.
+
+Other Orange Pi boards: use the Linux command below, or flash Armbian for that board and bake MIKCON with `sudo sh mikconPCserver/deploy/flash/inject.sh image.img`.
+
+## Linux (any PC or other Pi)
+
+64-bit OS. Skip Pi Zero / Pi 1. **One command** (installs Node 22 if needed, then starts):
 
 ```bash
 git clone https://github.com/str1k3rs13/mikcon.git && sh mikcon/mikconPCserver/start.sh

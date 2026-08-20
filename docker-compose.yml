@@ -1,0 +1,15 @@
+version: "2.4"
+services:
+  mikcon:
+    build:
+      context: .
+      dockerfile: mikconPCserver/Dockerfile
+    restart: always
+    network_mode: host
+    volumes:
+      - mikcon-data:/data
+    environment:
+      PORT: "8787"
+      MIKCON_DATA: /data
+volumes:
+  mikcon-data: {}

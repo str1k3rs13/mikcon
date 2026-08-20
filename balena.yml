@@ -1,0 +1,10 @@
+name: mikcon
+type: sw.application
+description: MIKCON WISP controller. Flash balenaOS with Etcher, the server starts, then set the password at http://DEVICE-IP:8787 (first login 1234).
+joinable: false
+post-provisioning: |
+  ## MIKCON
+
+  1. Wait until the device shows as online.
+  2. On a phone on the same LAN open http://DEVICE-IP:8787
+  3. Login **1234**, then type your new password.

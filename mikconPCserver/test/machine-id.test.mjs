@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { parseMachineGuid, parseLinuxMachineId, linuxMachineIdFrom, machineId } from "../main/machine-id.js";
+import { parseMachineGuid, parseLinuxMachineId, linuxMachineIdFrom, machineIdFromEnv, machineId } from "../main/machine-id.js";
 
 test("parseMachineGuid extracts the GUID from reg output", () => {
   const out = [
@@ -33,6 +33,13 @@ test("parseLinuxMachineId accepts a 32-hex machine-id and rejects junk", () => {
   assert.equal(parseLinuxMachineId("not-a-machine-id"), "");
   assert.equal(parseLinuxMachineId(""), "");
   assert.equal(parseLinuxMachineId("00000000000000000000000000000000"), "");
+});
+
+test("machineIdFromEnv accepts a 32-hex id and a dashed UUID", () => {
+  assert.equal(machineIdFromEnv("0123456789abcdef0123456789abcdef"), "0123456789abcdef0123456789abcdef");
+  assert.equal(machineIdFromEnv("01234567-89ab-cdef-0123-456789abcdef"), "0123456789abcdef0123456789abcdef");
+  assert.equal(machineIdFromEnv("not-an-id"), "");
+  assert.equal(machineIdFromEnv("00000000-0000-0000-0000-000000000000"), "");
 });
 
 test("linuxMachineIdFrom uses the first readable 32-hex file", () => {

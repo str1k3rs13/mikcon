@@ -1,0 +1,12 @@
+[Unit]
+Description=MIKCON login screen URL
+After=network-online.target mikcon.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mikcon/mikconPCserver/deploy/flash/issue.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

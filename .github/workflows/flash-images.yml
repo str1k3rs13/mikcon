@@ -1,0 +1,82 @@
+name: Flash images
+permissions:
+  contents: write
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "mikconPCserver/**"
+      - "juanfi-app/www/**"
+      - "docker-compose.yml"
+      - ".github/workflows/flash-images.yml"
+
+jobs:
+  raspberrypi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl
+      - name: Download Raspberry Pi OS Lite 64-bit
+        run: |
+          mkdir -p work
+          curl -L --fail -o work/pi.bin "https://downloads.raspberrypi.com/raspios_lite_arm64_latest"
+          file work/pi.bin
+          if file work/pi.bin | grep -qi zip; then unzip -p work/pi.bin "*.img" > work/pi.img
+          elif file work/pi.bin | grep -qi xz; then xz -dc work/pi.bin > work/pi.img
+          else mv work/pi.bin work/pi.img
+          fi
+      - name: Inject MIKCON
+        run: sudo sh mikconPCserver/deploy/flash/inject.sh work/pi.img
+      - name: Compress
+        run: xz -T0 -9 work/pi.img && mv work/pi.img.xz mikcon-raspberrypi-arm64.img.xz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mikcon-raspberrypi-arm64
+          path: mikcon-raspberrypi-arm64.img.xz
+      - name: Attach to latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(gh release view --json tagName -q .tagName || true)
+          if [ -n "$tag" ]; then
+            gh release upload "$tag" mikcon-raspberrypi-arm64.img.xz --clobber
+          fi
+
+  orangepi5:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl
+      - name: Download Armbian Orange Pi 5
+        run: |
+          mkdir -p work
+          curl -L --fail -o work/op.bin "https://dl.armbian.com/orangepi5/Trixie_vendor_minimal" || \
+          curl -L --fail -o work/op.bin "https://dl.armbian.com/orangepi5/Bookworm_vendor_minimal"
+          file work/op.bin
+          if file work/op.bin | grep -qi zip; then unzip -p work/op.bin "*.img" > work/op.img
+          elif file work/op.bin | grep -qi xz; then xz -dc work/op.bin > work/op.img
+          else mv work/op.bin work/op.img
+          fi
+      - name: Inject MIKCON
+        run: sudo sh mikconPCserver/deploy/flash/inject.sh work/op.img
+      - name: Compress
+        run: xz -T0 -9 work/op.img && mv work/op.img.xz mikcon-orangepi5-arm64.img.xz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mikcon-orangepi5-arm64
+          path: mikcon-orangepi5-arm64.img.xz
+      - name: Attach to latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(gh release view --json tagName -q .tagName || true)
+          if [ -n "$tag" ]; then
+            gh release upload "$tag" mikcon-orangepi5-arm64.img.xz --clobber
+          fi

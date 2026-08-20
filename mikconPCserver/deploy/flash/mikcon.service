@@ -1,0 +1,16 @@
+[Unit]
+Description=MikconPC Server
+After=network-online.target mikcon-firstboot.service
+Wants=network-online.target mikcon-firstboot.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/mikcon/mikconPCserver
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=3
+Environment=PORT=8787
+Environment=MIKCON_DATA=/var/lib/mikcon-pc-server
+
+[Install]
+WantedBy=multi-user.target

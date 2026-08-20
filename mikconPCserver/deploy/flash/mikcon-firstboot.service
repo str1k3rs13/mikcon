@@ -1,0 +1,13 @@
+[Unit]
+Description=MIKCON first boot (Wi-Fi, unique license id)
+After=network-online.target NetworkManager.service
+Before=mikcon.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mikcon/mikconPCserver/deploy/flash/first-boot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

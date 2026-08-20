@@ -1,0 +1,7 @@
+# MIKCON Wi-Fi (optional)
+# Flash the image, then open this SD card on your PC and fill these in.
+# Save, eject, boot the Pi. Ethernet works with no changes.
+
+country=PH
+#ssid=YourWifiName
+#psk=YourWifiPassword
