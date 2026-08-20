@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Tools
-        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils
       - name: Download Raspberry Pi OS Lite 64-bit
         run: |
           mkdir -p work
@@ -52,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Tools
-        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils
       - name: Download Armbian Orange Pi 5
         run: |
           mkdir -p work

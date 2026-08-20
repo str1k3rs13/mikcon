@@ -18,6 +18,14 @@ if [ ! -f "$SRC_SERVER/server.mjs" ] || [ ! -f "$SRC_WWW/index.html" ]; then
   exit 1
 fi
 
+# Lite images are ~2 GB. Node 22 + Tailscale + MIKCON does not fit.
+need=$((4 * 1024 * 1024 * 1024))
+cur=$(stat -c%s "$IMG" 2>/dev/null || stat -f%z "$IMG")
+if [ "$cur" -lt "$need" ]; then
+  echo "inject: growing image to 4G ($cur -> $need)"
+  truncate -s 4G "$IMG"
+fi
+
 LOOP=$(losetup -P -f --show "$IMG")
 cleanup() {
   set +e
@@ -48,6 +56,12 @@ if [ -z "$ROOTP" ]; then
   echo "inject: no Linux root partition on $IMG" >&2
   exit 1
 fi
+
+pnum=${ROOTP##*p}
+parted -s "$LOOP" resizepart "$pnum" 100% || true
+growpart "$LOOP" "$pnum" 2>/dev/null || true
+e2fsck -fy "$ROOTP" || true
+resize2fs "$ROOTP" || true
 
 mount "$ROOTP" "$ROOT"
 if [ -n "$BOOTP" ]; then
@@ -97,6 +111,10 @@ rm -f "$ROOT/var/lib/dbus/machine-id"
 rm -f "$ROOT/root/.not_logged_in_yet"
 
 cp /usr/bin/qemu-aarch64-static "$ROOT/usr/bin/qemu-aarch64-static"
+if [ -f /etc/resolv.conf ]; then
+  mkdir -p "$ROOT/run/systemd/resolve" "$ROOT/etc"
+  cp /etc/resolv.conf "$ROOT/etc/resolv.conf" || true
+fi
 mount -t proc proc "$ROOT/proc"
 mount -t sysfs sys "$ROOT/sys"
 mount --bind /dev "$ROOT/dev"
@@ -106,6 +124,7 @@ mount --bind /dev/pts "$ROOT/dev/pts" 2>/dev/null || true
 chroot "$ROOT" /usr/bin/qemu-aarch64-static /bin/sh -s <<'CHROOT'
 set -e
 export DEBIAN_FRONTEND=noninteractive
+apt-get clean || true
 if ! command -v curl >/dev/null 2>&1; then
   apt-get update -y
   apt-get install -y --no-install-recommends curl ca-certificates
@@ -114,9 +133,9 @@ if ! command -v node >/dev/null 2>&1; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
   apt-get install -y nodejs
 fi
-apt-get install -y --no-install-recommends avahi-daemon openssl
+apt-get install -y --no-install-recommends avahi-daemon openssl || true
 if ! command -v tailscale >/dev/null 2>&1; then
-  curl -fsSL https://tailscale.com/install.sh | sh
+  curl -fsSL https://tailscale.com/install.sh | sh || echo "inject: Tailscale skipped (install later with sudo tailscale up)"
 fi
 systemctl enable tailscaled || true
 if id root >/dev/null 2>&1; then
@@ -125,6 +144,8 @@ fi
 cd /opt/mikcon/mikconPCserver
 node scripts/sync-web.mjs || true
 node -e "var v=process.versions.node.split('.').map(Number); if (v[0]<22 || (v[0]===22 && v[1]<5)) process.exit(1)"
+apt-get clean || true
+rm -rf /var/lib/apt/lists/*
 CHROOT
 
 rm -f "$ROOT/usr/bin/qemu-aarch64-static"
