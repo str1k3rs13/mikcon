@@ -39,13 +39,10 @@ First start: sign in with **1234**, then set a new password (confirm and save). 
 npm start -- --reset-password
 ```
 
-Linux keep-alive (after `npm start` has synced `app/www` once):
+Linux keep-alive (writes a unit with a real WorkingDirectory so you do not get status=200/CHDIR):
 
 ```bash
-sudo cp deploy/mikcon-pc-server.service /etc/systemd/system/
-# edit WorkingDirectory to this folder
-sudo systemctl daemon-reload
-sudo systemctl enable --now mikcon-pc-server
+sudo sh install-linux.sh
 ```
 
 Open TCP **8787** in the Linux firewall (`ufw allow 8787/tcp` or the equivalent).

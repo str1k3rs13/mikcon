@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/mikconPCserver
+WorkingDirectory=/opt/mikcon/mikconPCserver
 ExecStart=/usr/bin/node server.mjs
 Restart=on-failure
 RestartSec=3

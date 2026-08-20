@@ -124,35 +124,13 @@ If you do not use ufw, open TCP **8787** in whatever firewall that host has.
 
 ### 3.5 Keep it running after reboot
 
-Stop the `npm start` you used for the first run (`Ctrl+C`). Then:
+From the repo root (do not hand-edit a missing WorkingDirectory — that is **status=200/CHDIR**):
 
 ```bash
-sudo cp deploy/mikcon-pc-server.service /etc/systemd/system/
-sudo nano /etc/systemd/system/mikcon-pc-server.service
+sudo sh mikconPCserver/install-linux.sh
 ```
 
-Set these two lines to the real paths on that machine:
-
-```
-WorkingDirectory=/opt/mikrotik-ai-panel/mikconPCserver
-ExecStart=/usr/bin/node server.mjs
-```
-
-`which node` shows the Node binary. Put that path in `ExecStart`.
-
-If you used `MIKCON_DATA`, add:
-
-```
-Environment=MIKCON_DATA=/var/lib/mikcon-pc-server
-```
-
-Then:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now mikcon-pc-server
-sudo systemctl status mikcon-pc-server
-```
+That copies `juanfi-app/www` into `mikconPCserver/app/www`, writes a unit whose `WorkingDirectory` is this folder, and enables the service.
 
 Logs:
 
@@ -160,7 +138,9 @@ Logs:
 journalctl -u mikcon-pc-server -f
 ```
 
-Do **not** use `npm start` under systemd. `npm start` re-copies the UI every time. systemd should run `node server.mjs` after the first successful `npm start`.
+If status is **200/CHDIR**, `/etc/systemd/system/mikcon-pc-server.service` points at a folder that is not on disk. Run `install-linux.sh` again.
+
+Do **not** use `npm start` under systemd. `npm start` re-copies the UI every time. systemd should run `node server.mjs`.
 
 ## 4. Sign in and license
 

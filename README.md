@@ -71,33 +71,28 @@ Other Orange Pi boards: use the Linux command below, or flash Armbian for that b
 
 ## Linux (any PC or other Pi)
 
-64-bit OS. Skip Pi Zero / Pi 1. **One command** (installs Node 22 if needed, then starts):
+64-bit OS. Skip Pi Zero / Pi 1. **Install and keep it running after reboot** (Node 22, web UI, systemd). Do not copy the `.service` file and leave `WorkingDirectory` as a missing folder — that is `status=200/CHDIR`.
+
+```bash
+git clone https://github.com/str1k3rs13/mikcon.git
+sudo sh mikcon/mikconPCserver/install-linux.sh
+```
+
+Open `http://127.0.0.1:8787` or `http://LAN-IP:8787`. First login **1234**, then set a new password.
+
+Foreground only (no systemd):
 
 ```bash
 git clone https://github.com/str1k3rs13/mikcon.git && sh mikcon/mikconPCserver/start.sh
 ```
 
-Leave it running. Open `http://127.0.0.1:8787` on that machine, or `http://PI-LAN-IP:8787` from a phone on the same Wi-Fi.
-
-Open the firewall:
+Firewall:
 
 ```bash
 sudo ufw allow 8787/tcp
 ```
 
-Keep it running after reboot:
-
-```bash
-sudo cp mikcon/mikconPCserver/deploy/mikcon-pc-server.service /etc/systemd/system/
-sudo nano /etc/systemd/system/mikcon-pc-server.service
-```
-
-Set `WorkingDirectory` to the real `mikconPCserver` folder and `ExecStart=/usr/bin/node server.mjs`, then:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now mikcon-pc-server
-```
+If `systemctl status mikcon-pc-server` shows **status=200/CHDIR**, the unit's `WorkingDirectory` does not exist. Run `install-linux.sh` again, or set that line to the real `mikconPCserver` folder (for a clone that is `/opt/mikcon/mikconPCserver` or `…/mikcon/mikconPCserver`).
 
 ---
 
@@ -130,12 +125,27 @@ Do not copy a Windows data folder onto Linux, or Linux data onto Windows. Each O
 
 ## Remote access (optional)
 
+**Tailscale** (install-linux.sh already installs the package):
+
 ```bash
-npm start -- --tailscale
+sudo tailscale up
+sudo tailscale set --ssh
+sudo tailscale ip -4
+```
+
+`tailscale up` prints a browser link. Open it while logged into the same Tailscale account as your phone/PC. Then open `http://100.x.x.x:8787` or `tailscale ssh USER@HOSTNAME`.
+
+**Cloudflare** (needs [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) already installed):
+
+```bash
 npm start -- --cloudflare
 ```
 
-Needs [Tailscale](https://tailscale.com) or [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) already installed.
+Foreground with Tailscale:
+
+```bash
+npm start -- --tailscale
+```
 
 ---
 
@@ -149,3 +159,12 @@ Needs [Tailscale](https://tailscale.com) or [cloudflared](https://developers.clo
 ## Need help
 
 Default port is **8787**. `node --version` must print **v22.5** or newer.
+
+`mikcon-pc-server.service` **status=200/CHDIR** means systemd cannot `cd` into `WorkingDirectory`. The stock unit uses `/opt/mikcon/mikconPCserver`. Either clone there:
+
+```bash
+sudo git clone https://github.com/str1k3rs13/mikcon.git /opt/mikcon
+sudo sh /opt/mikcon/mikconPCserver/install-linux.sh
+```
+
+or run `install-linux.sh` from whatever folder you cloned into (it rewrites the unit).
