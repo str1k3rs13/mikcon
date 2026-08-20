@@ -42,6 +42,7 @@ network={
     psk="${psk}"
 }
 EOF
+    chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null || true
     systemctl restart wpa_supplicant 2>/dev/null || true
   fi
 }
@@ -78,7 +79,17 @@ apply_tailscale() {
   if [ -n "$mid" ] && [ "$mid" != "uninitialized" ]; then
     ts_host="mikcon-$(printf "%s" "$mid" | cut -c1-6)"
   fi
-  tailscale up --auth-key="$key" --hostname="$ts_host" --accept-dns=false --ssh=false || true
+  if tailscale up --auth-key="$key" --hostname="$ts_host" --accept-dns=false --ssh=false; then
+    tmp=$(mktemp)
+    while IFS= read -r line || [ -n "$line" ]; do
+      case "$line" in
+        auth-key=*) printf "#auth-key=used-on-first-boot\n" >> "$tmp" ;;
+        *) printf "%s\n" "$line" >> "$tmp" ;;
+      esac
+    done < "$1"
+    cat "$tmp" > "$1" 2>/dev/null || true
+    rm -f "$tmp"
+  fi
 }
 
 ts_file=""

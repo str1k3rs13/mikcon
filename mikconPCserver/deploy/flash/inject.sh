@@ -138,9 +138,6 @@ if ! command -v tailscale >/dev/null 2>&1; then
   curl -fsSL https://tailscale.com/install.sh | sh || echo "inject: Tailscale skipped (install later with sudo tailscale up)"
 fi
 systemctl enable tailscaled || true
-if id root >/dev/null 2>&1; then
-  echo "root:1234" | chpasswd || true
-fi
 cd /opt/mikcon/mikconPCserver
 node scripts/sync-web.mjs || true
 node -e "var v=process.versions.node.split('.').map(Number); if (v[0]<22 || (v[0]===22 && v[1]<5)) process.exit(1)"
