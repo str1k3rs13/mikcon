@@ -45,6 +45,14 @@ Linux keep-alive (writes a unit with a real WorkingDirectory so you do not get s
 sudo sh install-linux.sh
 ```
 
+Check status (must say **active (running)** and **enabled**):
+
+```bash
+systemctl status mikcon-pc-server --no-pager
+systemctl is-enabled mikcon-pc-server
+systemctl is-active mikcon-pc-server
+```
+
 Open TCP **8787** in the Linux firewall (`ufw allow 8787/tcp` or the equivalent).
 
 The license is bound to this **machine** (Windows MachineGuid, Linux `/etc/machine-id`). Browsers are only a remote screen.

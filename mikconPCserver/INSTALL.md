@@ -132,6 +132,16 @@ sudo sh mikconPCserver/install-linux.sh
 
 That copies `juanfi-app/www` into `mikconPCserver/app/www`, writes a unit whose `WorkingDirectory` is this folder, and enables the service.
 
+Check it is running and will start on reboot:
+
+```bash
+systemctl status mikcon-pc-server --no-pager
+systemctl is-enabled mikcon-pc-server
+systemctl is-active mikcon-pc-server
+```
+
+`status` must show **active (running)**. `is-enabled` must print **enabled**.
+
 Logs:
 
 ```bash

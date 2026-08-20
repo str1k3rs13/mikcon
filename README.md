@@ -85,12 +85,15 @@ Open `http://127.0.0.1:8787` or `http://LAN-IP:8787`. First login **1234**, then
 
 **Always running after reboot.** `install-linux.sh` enables `mikcon-pc-server` as a systemd service (`Restart=always`). Leave the PC/Pi powered on. You do not keep a terminal open.
 
+Check status (must say **active (running)** and **enabled**):
+
 ```bash
+systemctl status mikcon-pc-server --no-pager
 systemctl is-enabled mikcon-pc-server
 systemctl is-active mikcon-pc-server
 ```
 
-Both must print `enabled` and `active`. After a reboot, open the same URL again — do not run `git clone` again.
+After a reboot, run `systemctl status` again — do not `git clone` again. Then open the same URL.
 
 Foreground only (no systemd — **stops when you close the terminal or reboot**):
 
@@ -179,14 +182,15 @@ npm start -- --tailscale
 
 The machine itself must stay powered on. A reboot of the OS is fine; a power-off is not.
 
-Check Linux:
+Check Linux (look for **active (running)** and **enabled**):
 
 ```bash
+systemctl status mikcon-pc-server --no-pager
 systemctl is-enabled mikcon-pc-server
 systemctl is-active mikcon-pc-server
 sudo reboot
 # after it comes back:
-systemctl is-active mikcon-pc-server
+systemctl status mikcon-pc-server --no-pager
 ```
 
 ## Need help

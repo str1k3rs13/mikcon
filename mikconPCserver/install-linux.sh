@@ -117,6 +117,7 @@ echo "Open  http://127.0.0.1:8787"
 echo "First login  1234  then set a new password."
 echo
 echo "Always running after reboot: mikcon-pc-server is systemd enabled."
+echo "  systemctl status mikcon-pc-server --no-pager"
 echo "  systemctl is-enabled mikcon-pc-server    # must print: enabled"
 echo "  systemctl is-active mikcon-pc-server     # must print: active"
 echo
