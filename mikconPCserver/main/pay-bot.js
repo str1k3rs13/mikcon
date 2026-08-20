@@ -39,6 +39,16 @@ function looksMac(s) {
   return MAC_RE.test(String(s == null ? "" : s).trim());
 }
 
+function pickLiveLease(leases, match) {
+  const hits = (leases || []).filter(match);
+  if (!hits.length) return null;
+  const live = hits.filter((l) => {
+    const st = String(l.status == null ? "bound" : l.status);
+    return st === "bound" && String(l.disabled) !== "true";
+  });
+  return live[0] || hits[0];
+}
+
 function normMac(s) {
   return String(s == null ? "" : s).toUpperCase().replace(/-/g, ":");
 }
@@ -61,9 +71,12 @@ export function pickUniqueProfileName(profiles, want) {
   const folded = name.toLowerCase();
   const ci = rows.filter((p) => String(p.name).toLowerCase() === folded);
   if (ci.length === 1) return { name: String(ci[0].name), reason: "exact" };
+  // Only profile-starts-with-plan. The reverse (plan starts with a shorter
+  // profile) mapped "Home 10 Mbps" onto "Home 10" and put the customer on the
+  // wrong speed.
   const prefix = rows.filter((p) => {
     const n = String(p.name);
-    return n === name || n.startsWith(name) || name.startsWith(n);
+    return n === name || n.startsWith(name);
   });
   if (prefix.length > 1) {
     return {
@@ -115,6 +128,27 @@ export function makeReconnector(exec) {
         cmd: "/ppp/secret/set",
         attrs,
       });
+      // Secret.profile only applies on the NEXT login. A live session on
+      // expired / the old plan stays up until we drop /ppp/active by exact name.
+      if (enable) {
+        try {
+          const active = await exec({
+            ...router,
+            cmd: "/ppp/active/print",
+            queries: { name: key },
+          });
+          for (const sess of (active || []).filter((r) => String(r.name) === String(key))) {
+            if (!sess[".id"]) continue;
+            try {
+              await exec({
+                ...router,
+                cmd: "/ppp/active/remove",
+                attrs: { ".id": sess[".id"] },
+              });
+            } catch {}
+          }
+        } catch {}
+      }
       return;
     }
 
@@ -132,10 +166,10 @@ export function makeReconnector(exec) {
       let lease = null;
       if (macHint) {
         const want = normMac(macHint);
-        lease = (leases || []).find((l) => normMac(l["mac-address"]) === want) || null;
+        lease = pickLiveLease(leases, (l) => normMac(l["mac-address"]) === want);
       }
       if (!lease && ip) {
-        lease = (leases || []).find((l) => String(l.address) === String(ip)) || null;
+        lease = pickLiveLease(leases, (l) => String(l.address) === String(ip));
       }
       if (lease && lease.address) ip = String(lease.address);
       if (!ip) throw new Error("cannot resolve IP for " + (key || address));
@@ -197,6 +231,7 @@ export function makePayBot({
   let running = false;
   let offset = 0;
   let loopPromise = null;
+  const decisionLocks = new Map();
 
   async function notify(row) {
     const code = encodeCode(row.id);
@@ -226,8 +261,30 @@ export function makePayBot({
   // matched customer, where the row is deliberately left pending rather than decided — the owner
   // can still reconnect manually and approve later once the account is matched.
   async function applyDecision({ row, approve, messageId, actor }) {
+    const lockId = Number(row && row.id);
+    if (decisionLocks.has(lockId)) {
+      await decisionLocks.get(lockId);
+      const now = payStore.byId(lockId);
+      if (now && now.status !== "pending") return { status: now.status };
+    }
+    let unlock;
+    const held = new Promise(function (resolve) { unlock = resolve; });
+    decisionLocks.set(lockId, held);
+    try {
+      return await applyDecisionBody({ row, approve, messageId, actor });
+    } finally {
+      decisionLocks.delete(lockId);
+      unlock();
+    }
+  }
+
+  async function applyDecisionBody({ row, approve, messageId, actor }) {
     const mid = messageId || row.tg_message_id;
     const who = normalizeActor(actor);
+    const fresh = payStore.byId(row.id);
+    if (!fresh || fresh.status !== "pending") {
+      return { status: (fresh && fresh.status) || "pending" };
+    }
 
     if (!approve) {
       const updated = payStore.decide(row.id, "declined", { messageId, by: who.name, role: who.role });
@@ -261,6 +318,9 @@ export function makePayBot({
     await reconnectOnRouter(await getRouter(row.router_id), outcome, customer);
     await recordPayment({ ...outcome.ledger, collected_by: who.name });
     const updated = payStore.decide(row.id, "approved", { messageId, by: who.name, role: who.role });
+    if (!updated || updated.claimed === false) {
+      return { status: (updated && updated.status) || "approved", fullyPaid: outcome.fullyPaid, amount: outcome.ledger.amount };
+    }
     if (typeof onApproved === "function") {
       try {
         await onApproved({ row: updated || row, customer, outcome, actor: who });

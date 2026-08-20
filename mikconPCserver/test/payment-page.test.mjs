@@ -71,8 +71,17 @@ test("payment page is a last-name form, not the operator login", () => {
   assert.match(html, /wait-receipt/);
   assert.match(html, /dash-due/);
   assert.match(html, /dash-wallet/);
+  assert.match(html, /dash-status/);
   assert.match(html, /dash-receipt/);
   assert.match(html, /Hello/);
+  const branded = renderPaymentPage({
+    brand: { name: "JeffNet", phone: "09171234567", address: "Purok 1, Town", logoDataUrl: "data:image/png;base64,aaa", message: "Hello" },
+  });
+  assert.match(branded, /JeffNet/);
+  assert.match(branded, /09171234567/);
+  assert.match(branded, /Purok 1, Town/);
+  assert.match(branded, /mark-img/);
+  assert.match(branded, /JeffNet — Pay/);
   assert.doesNotMatch(html, /Pay now with/);
   assert.doesNotMatch(html, /Sign in to open it/);
   assert.match(html, /openBtn\.onclick[\s\S]*link\.click/);
@@ -114,6 +123,9 @@ test("lookup needs first name, and last 4 when a phone is on file", async () => 
     assert.equal(hit.json.matches[0].name, "Cruz, Ana");
     assert.equal(hit.json.matches[0].key, undefined);
     assert.equal(hit.json.matches[0].amountDue, 600);
+    assert.equal(hit.json.matches[0].status.kind, "ok");
+    assert.equal(hit.json.matches[0].status.until, "2026-08-20");
+    assert.equal(hit.json.matches[0].status.days, 1);
   } finally { await h.close(); }
 });
 

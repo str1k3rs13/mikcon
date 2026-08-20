@@ -73,7 +73,7 @@ export function makePayStore({ db, clock, token = randomUUID }) {
 
   function decide(id, status, { messageId, by, role } = {}) {
     const actor = normalizeActor({ by, role, name: by });
-    decideStmt.run(
+    const info = decideStmt.run(
       String(status),
       messageId == null ? null : String(messageId),
       clock.today(),
@@ -81,7 +81,12 @@ export function makePayStore({ db, clock, token = randomUUID }) {
       actor.role,
       Number(id)
     );
-    return byIdStmt.get(Number(id));
+    const row = byIdStmt.get(Number(id));
+    if (!row) return null;
+    // SQLite already refuses the UPDATE when status is not pending. Callers that
+    // reconnect before decide() must treat claimed===false as "someone else won".
+    row.claimed = Number(info.changes) > 0;
+    return row;
   }
 
   function setMessageId(id, messageId) {

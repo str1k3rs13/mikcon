@@ -2,7 +2,7 @@
 // (webhook auto-approves) or a GCash reference (Telegram/app approval).
 import { randomUUID } from "node:crypto";
 import { normalizeSubmission } from "../agent/pay-request.js";
-import { matchesAccount, normalizeFirstName, normalizeLastName, normalizePhoneTail, publicCustomerCard } from "../agent/last-name.js";
+import { matchesAccount, normalizeFirstName, normalizeLastName, normalizePhoneTail, publicCustomerCard, serviceStatus } from "../agent/last-name.js";
 import { parseBill } from "../agent/billing.js";
 import { publicReceipt } from "../agent/receipt.js";
 
@@ -72,12 +72,18 @@ export function renderPaymentPage(config) {
   const gateway = (config && config.gateway) || {};
   const gcashManual = config && config.gcashManual !== false;
   const gatewayOn = !!gateway.enabled;
+  const bizName = escapeHtml(brand.name || "Mikcon");
+  const bizPhone = escapeHtml(brand.phone || "");
+  const bizAddr = escapeHtml(brand.address || "");
+  const logo = escapeHtml(brand.logoDataUrl || "");
+  const initial = escapeHtml(((brand.name || "M").trim().charAt(0) || "M").toUpperCase());
   const message = escapeHtml(brand.message || "Pay your bill or add credit. Type your last name to find your account.");
   const gname = escapeHtml(gcash.name || "");
   const gnumber = escapeHtml(gcash.number || "");
   const qr = escapeHtml(gcash.qrDataUrl || "");
   const banner = escapeHtml(brand.bannerDataUrl || "");
   const provider = escapeHtml(gateway.provider === "xendit" ? "Xendit" : "PayMongo");
+  const pageTitle = brand.name ? escapeHtml(brand.name) + " — Pay" : "Pay or add credit";
 
   return `<!doctype html>
 <html lang="en">
@@ -85,7 +91,7 @@ export function renderPaymentPage(config) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
-<title>Pay or add credit</title>
+<title>${pageTitle}</title>
 <style>
   :root{
     --bg:#EEF1F5;--ink:#0F1720;--muted:#5A6A7A;--brand:#163A5C;--cta:#163A5C;--on:#FFFFFF;
@@ -118,6 +124,9 @@ export function renderPaymentPage(config) {
     width:36px;height:36px;border-radius:8px;background:var(--brand);color:var(--on);
     display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;
   }
+  .mark-img{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--line);background:var(--paper)}
+  .biz-meta{margin:0 0 16px;font-size:12px;color:var(--muted);line-height:1.45}
+  .biz-foot{margin:28px 0 0;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);line-height:1.5}
   .brand strong{display:block;font-size:15px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
   .brand span{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:1px}
   .banner{width:100%;max-width:100%;height:auto;border-radius:12px;margin:0 0 16px;display:block;border:1px solid var(--line)}
@@ -194,6 +203,14 @@ export function renderPaymentPage(config) {
     font-variant-numeric:tabular-nums;margin-top:4px;line-height:1.15;overflow-wrap:anywhere;color:var(--brand);
   }
   .tile-wallet .v{color:var(--ink)}
+  .substat{
+    margin:0 0 12px;padding:12px;border-radius:8px;border:1px solid var(--line);background:var(--tile);
+  }
+  .substat .substat-k{display:block;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+  .substat .substat-v{display:block;font-size:1.15rem;font-weight:700;letter-spacing:-.02em;margin-top:2px;color:var(--brand)}
+  .substat .substat-d{display:block;font-size:13px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .substat.due .substat-v{color:var(--ink)}
+  .substat.over .substat-v{color:var(--err)}
   .facts{
     display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 8px;margin:0 0 8px;
   }
@@ -235,9 +252,10 @@ export function renderPaymentPage(config) {
 <main class="wrap">
 ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
 <div class="brand">
-  <span class="mark" aria-hidden="true">M</span>
-  <div><strong>Mikcon</strong><span>Customer billing</span></div>
+  ${logo ? `<img class="mark-img" src="${logo}" alt="">` : `<span class="mark" aria-hidden="true">${initial}</span>`}
+  <div><strong>${bizName}</strong><span>${bizPhone || "Customer billing"}</span></div>
 </div>
+${bizAddr ? `<p class="biz-meta">${bizAddr}</p>` : ""}
 <h1>Pay or add credit</h1>
 <p class="lede">${message}</p>
 <ol class="prog" aria-label="Payment progress">
@@ -271,6 +289,11 @@ ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
       <span class="v" id="dash-wallet">₱0</span>
     </div>
   </div>
+  <div class="substat" id="dash-status">
+    <span class="substat-k">Status</span>
+    <span class="substat-v" id="dash-status-v">—</span>
+    <span class="substat-d" id="dash-until"></span>
+  </div>
   <div class="facts">
     <p class="meta" id="dash-date"></p>
     <p class="meta" id="dash-plan"></p>
@@ -301,6 +324,7 @@ ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
   ${gcashManual ? `<label for="ref">GCash reference (after you pay)</label>
   <input id="ref" maxlength="40" autocomplete="off" placeholder="Reference number">
   <button type="button" id="send">I already paid</button>` : ""}
+  <p class="meta" id="dash-status-foot"></p>
   <button type="button" class="ghost" id="back">Look up another name</button>
 </div>
 
@@ -314,6 +338,7 @@ ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
 </div>
 
 <p id="result" aria-live="polite"></p>
+${(brand.name || brand.phone || brand.address) ? `<footer class="biz-foot">${bizName}${bizPhone ? "<br>" + bizPhone : ""}${bizAddr ? "<br>" + bizAddr : ""}</footer>` : ""}
 </main>
 <script>
 (function(){
@@ -393,6 +418,9 @@ ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
           var bits = [];
           if (h.site) bits.push(h.site);
           if (h.plan) bits.push(h.plan);
+          if (h.status && h.status.kind === "ok") bits.push("active until " + h.status.until);
+          else if (h.status && h.status.kind === "due") bits.push("expires today");
+          else if (h.status && h.status.kind === "over") bits.push("expired " + h.status.until);
           bits.push(h.amountDue ? ("due " + peso(h.amountDue)) : "no amount due");
           em.textContent = bits.join(" - ");
           b.appendChild(em);
@@ -442,7 +470,26 @@ ${banner ? `<img class="banner" src="${banner}" alt="">` : ""}
     }
     setText("dash-due", dueAmt > 0 ? peso(dueAmt) : "₱0");
     setText("dash-wallet", peso(h.wallet));
+    var st = h.status || {};
+    var box = document.getElementById("dash-status");
+    if (box) box.className = "substat" + (st.kind ? " " + st.kind : "");
+    setText("dash-status-v", st.label || "Unknown");
+    var until = "";
+    if (st.kind === "ok") {
+      until = "Valid until " + st.until;
+      if (st.days != null) until += " · " + st.days + " day" + (st.days === 1 ? "" : "s") + " left";
+    } else if (st.kind === "due") {
+      until = "Expires today · " + (st.until || "");
+    } else if (st.kind === "over") {
+      until = "Expired on " + (st.until || "");
+    } else if (st.until) {
+      until = "Valid until " + st.until;
+    } else {
+      until = "No expiry date on this account.";
+    }
+    setText("dash-until", until);
     setText("dash-date", h.due ? ("Due " + h.due) : "No due date");
+    setText("dash-status-foot", until);
     setText("dash-plan", h.plan ? ("Plan " + h.plan) : "", true);
     var rec = "";
     if (h.lastReceipt && h.lastReceipt.code) {
@@ -697,10 +744,13 @@ export function makePaymentApi({ db, payStore, clock, getConfig, onPending, rout
       const lastRec = receipts && receipts.lastForCustomer
         ? receipts.lastForCustomer(row.router_id, row.key)
         : null;
+      const today = clock && typeof clock.today === "function" ? clock.today() : "";
+      const status = serviceStatus({ due: customer.due, today });
       matches.push({
         pick,
         ...publicCustomerCard(customer, site),
-        notDue: !!(customer.due && clock.today() && String(customer.due) > String(clock.today())),
+        notDue: status.kind === "ok",
+        status,
         lastReceipt: publicReceipt(lastRec),
       });
       if (matches.length >= 12) break;

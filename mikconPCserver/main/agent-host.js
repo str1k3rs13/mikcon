@@ -26,6 +26,7 @@ import { makePayBot as defaultMakePayBot, makeReconnector } from "./pay-bot.js";
 import { makeRecordPayment, makeResolveCustomers } from "./pay-wiring.js";
 import { parseBill, billComment } from "../agent/billing.js";
 import { computeRenewal } from "../agent/wallet-renew.js";
+import { sanitizeBrand, mergeBrand } from "./brand.js";
 
 // uid() in the app mints "r" + randomUUID. Anything outside that shape is not an id we wrote,
 // and these ids are both interpolated into a script and concatenated into localStorage key
@@ -366,7 +367,7 @@ export function startAgentHost({
         routerId: config.routerId || "",
         host: config.host || "",
         gcash: { name: "", number: "", qrDataUrl: "", ...(config.gcash || {}) },
-        brand: { message: "", bannerDataUrl: "", ...(config.brand || {}) },
+        brand: sanitizeBrand(config.brand),
       },
       // The raw token NEVER crosses into the renderer — only whether one is set.
       telegram: { chatId: creds.chatId || "", hasToken: !!creds.token },
@@ -376,6 +377,7 @@ export function startAgentHost({
   async function payReminderSetConfig({ config, telegram } = {}) {
     if (config && typeof config === "object") {
       const host = config.host ? String(config.host) : "";
+      const existing = await payReminderConfig();
       const clean = {
         enabled: !!config.enabled,
         port: Number(config.port) || 0,
@@ -388,10 +390,7 @@ export function startAgentHost({
           number: String((config.gcash && config.gcash.number) || ""),
           qrDataUrl: String((config.gcash && config.gcash.qrDataUrl) || ""),
         },
-        brand: {
-          message: String((config.brand && config.brand.message) || ""),
-          bannerDataUrl: String((config.brand && config.brand.bannerDataUrl) || ""),
-        },
+        brand: mergeBrand(existing.brand, config.brand),
       };
       if (store) await store.set("payreminder-config", JSON.stringify(clean));
     }

@@ -98,6 +98,24 @@ test("paid token extractors only accept paid events", () => {
   assert.equal(paymongoPaidToken({
     data: { type: "checkout_session.payment.failed", attributes: { reference_number: "tok1" } },
   }), "");
+  assert.equal(paymongoPaidToken({
+    data: {
+      type: "event",
+      attributes: {
+        type: "checkout_session.payment.paid",
+        data: { attributes: { reference_number: "tok-live" } },
+      },
+    },
+  }), "tok-live");
+  assert.equal(paymongoPaidToken({
+    data: {
+      type: "event",
+      attributes: {
+        type: "payment.failed",
+        data: { attributes: { reference_number: "tok-live" } },
+      },
+    },
+  }), "");
   assert.equal(xenditPaidToken({ status: "PAID", external_id: "tok2" }), "tok2");
   assert.equal(xenditPaidToken({ status: "PENDING", external_id: "tok2" }), "");
 });

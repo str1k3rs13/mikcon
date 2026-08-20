@@ -63,6 +63,11 @@ mkdir -p "$ROOT/opt/mikcon/juanfi-app" "$ROOT/opt/mikcon/mikconPCserver" "$ROOT/
 rm -rf "$ROOT/opt/mikcon/mikconPCserver"
 cp -a "$SRC_SERVER" "$ROOT/opt/mikcon/mikconPCserver"
 rm -rf "$ROOT/opt/mikcon/mikconPCserver/node_modules" "$ROOT/opt/mikcon/mikconPCserver/test"
+# app/www is gitignored on the PC checkout, so bake the UI next to server.mjs
+# (systemd runs `node server.mjs`, which serves app/www, not juanfi-app/www).
+mkdir -p "$ROOT/opt/mikcon/mikconPCserver/app"
+rm -rf "$ROOT/opt/mikcon/mikconPCserver/app/www"
+cp -a "$SRC_WWW" "$ROOT/opt/mikcon/mikconPCserver/app/www"
 cp -a "$SRC_WWW" "$ROOT/opt/mikcon/juanfi-app/www"
 
 install -m 644 "$SCRIPT_DIR/mikcon.service" "$ROOT/etc/systemd/system/mikcon.service"

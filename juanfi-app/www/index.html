@@ -99,6 +99,7 @@
   header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
     padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--headerbg);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
   header .logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(150deg,#2b66c2,#3987e5);display:grid;place-items:center;color:#fff;flex:0 0 auto}
+  header .logo img{width:34px;height:34px;border-radius:10px;object-fit:cover;display:block}
   header h1{font-size:15.5px;font-weight:700;letter-spacing:.2px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   header .thm{flex:0 0 auto;width:40px;height:40px;padding:0;border-radius:11px;background:var(--panel2);border:1px solid var(--edge);color:var(--text)}
   /* Version badge. Operators quote this when reporting a problem, and it is how you tell
@@ -635,6 +636,28 @@
 <main>
   <!-- STATUS (live router health, like the MikroTik app) -->
   <section id="view-status" class="hide">
+    <div class="card" id="biz-card">
+      <h2><span data-icon="users"></span>Business</h2>
+      <div class="sub">Shown in this app and on the client payment page.</div>
+      <div id="biz-edit">
+        <label for="biz-name">Business name</label>
+        <input id="biz-name" maxlength="80" placeholder="e.g. JeffNet">
+        <label for="biz-phone">Contact number</label>
+        <input id="biz-phone" maxlength="40" placeholder="e.g. 0917 123 4567">
+        <label for="biz-addr">Address</label>
+        <input id="biz-addr" maxlength="160" placeholder="Purok / street / town">
+        <label>Logo</label>
+        <div class="muted" style="font-size:11.5px">PNG, JPEG, or WebP. Square works best. Maximum 2 MB.</div>
+        <input id="biz-logo" class="hide" type="file" accept="image/png,image/jpeg,image/webp" onchange="bizLogoPicked(this)">
+        <div class="row" style="margin-top:8px">
+          <button class="ghost" type="button" onclick="$('biz-logo').click()"><span data-icon="open" data-icon-size="15"></span><span id="biz-logo-action">Choose logo</span></button>
+          <button class="ghost bad shrink" type="button" onclick="bizLogoRemove()">Remove</button>
+        </div>
+        <div id="biz-logo-name" class="muted" style="font-size:11.5px;margin-top:5px">No logo yet. The MIKCON mark is used.</div>
+        <button style="width:100%;margin-top:10px" type="button" onclick="saveBrand(this)"><span data-icon="check" data-icon-size="15"></span>Save business</button>
+      </div>
+      <div id="biz-readonly" class="hide muted" style="font-size:12.5px">Ask an admin to set the business name, number, address, and logo.</div>
+    </div>
     <div class="card hide" id="st-empty">
       <h2><span data-icon="gauge"></span>Router status</h2>
       <div class="empty">No active router yet. Add or select one to see live CPU, memory and traffic.</div>
@@ -710,6 +733,14 @@
           <button class="ghost sm" type="button" onclick="openFacebook()"><span data-icon="open" data-icon-size="14"></span>Facebook</button>
         </div>
       </div>
+    </div>
+    <div class="card" id="st-sub-card">
+      <h2><span data-icon="ticket"></span>MIKCON subscription</h2>
+      <div class="kv">
+        <div><div class="k">Status</div><div class="v" id="st-sub-state">—</div></div>
+        <div><div class="k">Expires</div><div class="v" id="st-sub-exp">—</div></div>
+      </div>
+      <div class="sub" id="st-sub-note">When this date is reached, open Buy to renew. Shown here and from the key on this device if you are offline.</div>
     </div>
     <!-- One complete Machine ID. Device and License used to print the same value twice,
          then the pack list printed it a third time as "PC … (this)". Outside #st-body and
@@ -1875,6 +1906,7 @@ function staffUnlock(session){
   $("staff-gate").classList.add("hide");
   $("sg-pin").value=""; $("sg-msg").textContent="";
   applyPanelPerms();
+  if(typeof loadBrand==="function") loadBrand();
   go(firstAllowed());
 }
 // Tries every known PIN before the router password. Returns whether anyone was signed in; the
@@ -2737,11 +2769,14 @@ function dueState(due){
 // so collections are recorded per-router on THIS phone. Treated as a record of what you
 // collected here, never as the authoritative books.
 function ledgerKey(){ var a=active(); return "jf_ledger_"+((a&&a.id)||"x"); }
+function ledgerLocal(){
+  try{ return JSON.parse(localStorage.getItem(ledgerKey())||"[]")||[]; }catch(e){ return []; }
+}
 function ledger(){
-  var local=[];
-  try{ local=JSON.parse(localStorage.getItem(ledgerKey())||"[]")||[]; }catch(e){ local=[]; }
-  if(!_serverSales||!_serverSales.length) return local;
-  var extra=_serverSales.map(function(p){
+  var local=ledgerLocal();
+  var srv=(typeof _serverSales!=="undefined"&&_serverSales)||[];
+  if(!srv.length) return local;
+  var extra=srv.map(function(p){
     return {
       n:String(p.account||p.customer_key||"Customer"),
       a:Number(p.amount)||0,
@@ -2768,7 +2803,7 @@ function ledgerKeyFor(name,due){ return String(name)+"|"+String(due||todayYmd())
 // A row written before `t` existed carries none and matches either technology — it could be
 // either, and warning about a possible duplicate is the safe side of that doubt.
 function sameTech(a,b){ return !a||!b||String(a)===String(b); }
-function ledgerHas(k,t){ return !!k && ledger().some(function(e){ return e.k===k && sameTech(e.t,t); }); }
+function ledgerHas(k,t){ return !!k && ledgerLocal().some(function(e){ return e.k===k && sameTech(e.t,t); }); }
 // A customer really can pay two cycles in one visit. That is a different collection, not a
 // double tap, so it gets the next free key rather than being dropped.
 function ledgerFreeKey(k,t){
@@ -2867,7 +2902,7 @@ function applyPayment(b,amount,today){
 }
 function ledgerAdd(name,amt,type,k,kind){
   if(ledgerHas(k,type)) return false;
-  var l=ledger();
+  var l=ledgerLocal();
   l.push({n:String(name),a:Number(amt)||0,at:todayYmd(),t:type||"ppp",k:k||"",knd:kind||"collect"});
   while(l.length>500) l.shift();
   try{ localStorage.setItem(ledgerKey(),JSON.stringify(l)); }catch(e){}
@@ -2897,7 +2932,7 @@ function collectedThisMonth(){
 // collection was taken and nothing here moves it back. On a money screen "delete" reads as undo,
 // so the confirm says which one this is.
 function ledgerDel(i){
-  var l=ledger();
+  var l=ledgerLocal();
   if(!(i>=0)||i>=l.length) return false;
   l.splice(i,1);
   try{ localStorage.setItem(ledgerKey(),JSON.stringify(l)); }catch(e){}
@@ -2925,7 +2960,7 @@ function clearLedger(){
 }
 function clearLedgerAsk(){
   var a=active(); if(!a) return;
-  var l=ledger();
+  var l=ledgerLocal();
   if(!l.length){ toast("Nothing recorded on this phone yet.","bad"); return; }
   var sum=l.reduce(function(s,e){ return s+(Number(e.a)||0); },0);
   if(!confirm('Clear all recorded collections for "'+((a&&a.name)||(a&&a.ip)||"this router")+'"?\n\n'
@@ -3245,7 +3280,7 @@ function salesCsvAll(){
     list.forEach(function(e){
       data.push({at:String(e.at||""),n:String(e.n||""),a:Number(e.a)||0,t:String(e.t||""),r:name});
     });
-    (_serverSales||[]).forEach(function(p){
+    ((typeof _serverSales!=="undefined"&&_serverSales)||[]).forEach(function(p){
       if(r.id && p.router_id && String(p.router_id)!==String(r.id)) return;
       data.push({
         at:String(p.at||""), n:String(p.account||p.customer_key||""),
@@ -8007,7 +8042,7 @@ function toggleManual(){ var m=$("lg-manual"); if(m) m.classList.toggle("hide");
 var LICENSE_BASE = "https://miklic.jeff-network.com";
 // Bump together with android/app/build.gradle versionName. The licence server compares this
 // against min_app_version; a build that forgets to bump it will gate itself.
-var APP_VERSION = "3.16.12";
+var APP_VERSION = "3.16.13";
 var _updOffer=null, _updBusy=false;
 function licensePlatform(){
   try{
@@ -8244,7 +8279,45 @@ async function declinePair(btn){
   }catch(e){ toast(e.message||"Could not reach the license server.","bad"); }
   if(btn) btn.disabled=false;
 }
+var _subInfo=null;
+function daysLeftIso(iso){
+  if(!iso) return null;
+  var end=new Date(iso);
+  if(isNaN(end.getTime())) return null;
+  return Math.ceil((end.getTime()-Date.now())/86400000);
+}
+function paintSubStatus(info){
+  if(info) _subInfo=info;
+  var s=_subInfo||{};
+  var stateEl=$("st-sub-state"), expEl=$("st-sub-exp"), noteEl=$("st-sub-note");
+  if(!stateEl) return;
+  var st=String(s.state||"");
+  var model=String(s.model||"");
+  var exp=s.expires||"";
+  var label="—";
+  if(st==="trial_active"||model==="trial") label="Trial";
+  else if(st==="trial_expired") label="Trial ended";
+  else if(st==="expired") label="Expired";
+  else if(st==="licensed"||model==="perpetual"||model==="monthly"||model==="unlimited") label="Paid";
+  else if(exp) label="Active";
+  stateEl.textContent=label;
+  if(!exp){
+    if(expEl) expEl.textContent="No expiry";
+    if(noteEl) noteEl.textContent=label==="—"?"Waiting for the license server.":"This key does not expire.";
+    return;
+  }
+  var day=String(exp).slice(0,10);
+  if(expEl) expEl.textContent=day;
+  var n=daysLeftIso(exp);
+  if(!noteEl) return;
+  if(n==null) noteEl.textContent="";
+  else if(n>1) noteEl.textContent=n+" days left.";
+  else if(n===1) noteEl.textContent="Expires tomorrow.";
+  else if(n===0) noteEl.textContent="Expires today. Renew to stay on.";
+  else noteEl.textContent="Expired. Open Buy to renew.";
+}
 function renderPackStatus(srv){
+  paintSubStatus(srv);
   var el=$("st-pack"); if(!el) return;
   _lastPairSig=pairSig(srv);
   var seats=(srv&&srv.seats)||[];
@@ -8632,7 +8705,7 @@ async function bootLicense(){
     if(srv.state==="blocked"){ gateLocked("blocked"); loadAppCfg(); return false; }
     if(srv.state==="trial_expired"||srv.state==="expired"){ gateLocked(srv.state); loadAppCfg(); return false; }
     if((srv.state==="licensed"||srv.state==="trial_active")&&srv.key){
-      if(await applyKey(srv.key)===true){ setTrialDead(false); renderPackStatus(srv); maybeOfferUpdate(srv); startPaidPairWatch(); return true; }
+      if(await applyKey(srv.key)===true){ setTrialDead(false); paintSubStatus(srv); renderPackStatus(srv); maybeOfferUpdate(srv); startPaidPairWatch(); return true; }
       // Server says this device is licensed but the key would not verify here (wrong device,
       // bad signature, clock). Don't fall through silently to a blank gate — the trial is
       // not the answer, so say what happened and leave Buy/manual entry available.
@@ -8663,7 +8736,13 @@ async function bootLicense(){
       // clockRolledBack() above and by the server check on the next online start.
       if(trialDead() && r.license && r.license.model==="trial"){ gateLocked("trial_expired"); loadAppCfg(); return false; }
       setTrialDead(false); tfBump(new Date().toISOString());
-      $("license-gate").classList.add("hide"); return true;
+      $("license-gate").classList.add("hide");
+      paintSubStatus({
+        state: (r.license && r.license.model)==="trial" ? "trial_active" : "licensed",
+        model: r.license && r.license.model,
+        expires: r.license && r.license.expires
+      });
+      return true;
     }
     if(r.reason==="expired"){ gateLocked(r.model==="trial" ? "trial_expired" : "expired"); loadAppCfg(); return false; }
   }
@@ -8695,6 +8774,116 @@ function toggleTheme(){
   // the canvases bake their colours in at draw time; the 2 s status tick repaints them
 }
 
+// Business name, number, address, logo — app header and the client /payment page.
+var _biz={name:"",phone:"",address:"",logoDataUrl:""};
+function brandFromStorage(){
+  try{
+    var s=JSON.parse(localStorage.getItem("jf_brand")||"{}");
+    if(s&&typeof s==="object") return s;
+  }catch(e){}
+  return {};
+}
+function applyBrand(b){
+  b=b||{};
+  var name=String(b.name||"").trim()||"MikroTik Controller";
+  var title=$("app-title"), ver=$("app-ver");
+  if(title){
+    title.textContent="";
+    title.appendChild(document.createTextNode(name+" "));
+    if(!ver){ ver=document.createElement("span"); ver.id="app-ver"; ver.className="vertag"; ver.textContent="v"+APP_VERSION; }
+    title.appendChild(ver);
+  }
+  var logo=document.querySelector("header .logo");
+  if(logo){
+    if(!logo.getAttribute("data-default")) logo.setAttribute("data-default", logo.innerHTML);
+    var src=String(b.logoDataUrl||"");
+    if(/^data:image\/(png|jpeg|jpg|webp);base64,/i.test(src) && src.length<400000){
+      logo.textContent="";
+      var img=document.createElement("img");
+      img.alt="";
+      img.src=src;
+      logo.appendChild(img);
+    } else {
+      logo.innerHTML=logo.getAttribute("data-default");
+    }
+  }
+}
+function fillBrandForm(b){
+  b=b||{};
+  _biz={name:String(b.name||""),phone:String(b.phone||""),address:String(b.address||""),logoDataUrl:String(b.logoDataUrl||"")};
+  if($("biz-name")) $("biz-name").value=_biz.name;
+  if($("biz-phone")) $("biz-phone").value=_biz.phone;
+  if($("biz-addr")) $("biz-addr").value=_biz.address;
+  if($("biz-logo-name")) $("biz-logo-name").textContent=_biz.logoDataUrl?"Custom logo on.":"No logo yet. The MIKCON mark is used.";
+  if($("biz-logo-action")) $("biz-logo-action").textContent=_biz.logoDataUrl?"Replace logo":"Choose logo";
+  var can=!_session || (typeof isPayAdmin==="function"?isPayAdmin():true);
+  if($("biz-edit")) $("biz-edit").classList.toggle("hide", !can);
+  if($("biz-readonly")) $("biz-readonly").classList.toggle("hide", can);
+}
+async function loadBrand(){
+  var b=brandFromStorage();
+  var api=typeof payReminderApi==="function"?payReminderApi():null;
+  if(api&&api.getConfig){
+    try{
+      var c=await api.getConfig();
+      var br=c&&c.config&&c.config.brand;
+      if(br&&(br.name||br.phone||br.address||br.logoDataUrl)) b=br;
+    }catch(e){}
+  }
+  fillBrandForm(b);
+  applyBrand(b);
+}
+function bizLogoPicked(input){
+  var file=input&&input.files&&input.files[0]; if(!file) return;
+  if(file.size>2*1024*1024){ toast("Logo must be 2 MB or smaller.","bad"); input.value=""; return; }
+  var r=new FileReader();
+  r.onload=function(){
+    var img=new Image();
+    img.onload=function(){
+      var s=Math.min(256/Math.max(img.width,img.height),1);
+      var c=document.createElement("canvas");
+      c.width=Math.max(1,Math.round(img.width*s));
+      c.height=Math.max(1,Math.round(img.height*s));
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+      _biz.logoDataUrl=c.toDataURL("image/jpeg",0.86);
+      $("biz-logo-name").textContent="Logo ready — tap Save business.";
+      $("biz-logo-action").textContent="Replace logo";
+    };
+    img.onerror=function(){ toast("Could not read that image.","bad"); };
+    img.src=r.result;
+  };
+  r.readAsDataURL(file);
+  input.value="";
+}
+function bizLogoRemove(){
+  _biz.logoDataUrl="";
+  if($("biz-logo-name")) $("biz-logo-name").textContent="No logo yet. The MIKCON mark is used.";
+  if($("biz-logo-action")) $("biz-logo-action").textContent="Choose logo";
+}
+async function saveBrand(btn){
+  var brand={
+    name:String($("biz-name")&&$("biz-name").value||"").trim(),
+    phone:String($("biz-phone")&&$("biz-phone").value||"").trim(),
+    address:String($("biz-addr")&&$("biz-addr").value||"").trim(),
+    logoDataUrl:_biz.logoDataUrl||""
+  };
+  if(btn) btn.disabled=true;
+  try{
+    try{ localStorage.setItem("jf_brand", JSON.stringify(brand)); }catch(e){}
+    _biz=brand;
+    applyBrand(brand);
+    var api=typeof payReminderApi==="function"?payReminderApi():null;
+    if(api&&api.getConfig&&api.setConfig){
+      var c=await api.getConfig();
+      var cfg=c.config||{};
+      cfg.brand=Object.assign({}, cfg.brand||{}, brand);
+      await api.setConfig({ config: cfg });
+    }
+    toast("Business saved. It shows in the app and on the payment page.","ok");
+  }catch(e){ toast(e.message||"Could not save business.","bad"); }
+  if(btn) btn.disabled=false;
+}
+
 // ---------- boot ----------
 // Show the running version in the header and on the licence gate. The gate copy matters:
 // it is the screen an operator is looking at when they message you for help.
@@ -8711,6 +8900,7 @@ function toggleTheme(){
   await bootStaff();
   paintIcons();
   applyPanelPerms();
+  await loadBrand();
   renderRouters();
   refreshStatus();
   // The landing panel still prefers status, then routers — but never a panel this session cannot

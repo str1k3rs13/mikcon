@@ -138,11 +138,16 @@ function pick(obj, path) {
 }
 
 export function paymongoPaidToken(body) {
-  const type = pick(body, ["data", "type"]) || pick(body, ["type"]);
+  // Live PayMongo webhooks wrap the event as data.type === "event" and put the
+  // real event name on data.attributes.type. Tests and older payloads put the
+  // paid name on data.type. Accept both so a real Event is not ignored.
+  const type = pick(body, ["data", "attributes", "type"])
+    || pick(body, ["data", "type"])
+    || pick(body, ["type"]);
   if (type !== "checkout_session.payment.paid" && type !== "payment.paid") return "";
-  return pick(body, ["data", "attributes", "reference_number"])
+  return pick(body, ["data", "attributes", "data", "attributes", "reference_number"])
+    || pick(body, ["data", "attributes", "reference_number"])
     || pick(body, ["data", "data", "attributes", "reference_number"])
-    || pick(body, ["data", "attributes", "data", "attributes", "reference_number"])
     || "";
 }
 

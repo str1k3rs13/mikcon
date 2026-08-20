@@ -83,6 +83,31 @@ export function amountDue(customer) {
   return Math.max(0, Math.round((price - bal) * 100) / 100);
 }
 
+export function ymdDiffDays(from, to) {
+  const a = Date.parse(String(from || "").slice(0, 10) + "T00:00:00");
+  const b = Date.parse(String(to || "").slice(0, 10) + "T00:00:00");
+  if (!isFinite(a) || !isFinite(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+
+// What a customer should read: Active / Due today / Expired, plus the date their
+// current cycle ends. today is YYYY-MM-DD from the PC clock, never the phone.
+export function serviceStatus({ due, today } = {}) {
+  const d = String(due || "").slice(0, 10);
+  const t = String(today || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    return { kind: "unknown", label: "No expiry date", until: "", days: null };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    return { kind: "unknown", label: "Valid until " + d, until: d, days: null };
+  }
+  const days = ymdDiffDays(t, d);
+  if (days == null) return { kind: "unknown", label: "Valid until " + d, until: d, days: null };
+  if (days > 0) return { kind: "ok", label: "Active", until: d, days };
+  if (days === 0) return { kind: "due", label: "Due today", until: d, days: 0 };
+  return { kind: "over", label: "Expired", until: d, days };
+}
+
 export function publicCustomerCard(customer, routerName) {
   const name = String((customer && customer.name) || "").trim() || "Customer";
   return {

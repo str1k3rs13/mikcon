@@ -12,8 +12,12 @@ test("create → pending → approve → idempotent", () => {
   const db = openStore(":memory:"); const s = makePayStore({ db, clock, token });
   const { id, token: tk } = s.create({ routerId: "r1", request: { account: "Juan", ref: "ABCD", amount: 100 }, customerKey: "juan01", clientIp: "10.0.0.5" });
   assert.equal(s.byToken(tk).status, "pending");
-  assert.equal(s.decide(id, "approved", { messageId: "9" }).status, "approved");
-  assert.equal(s.decide(id, "declined", {}).status, "approved", "already decided is a no-op");
+  const first = s.decide(id, "approved", { messageId: "9" });
+  assert.equal(first.status, "approved");
+  assert.equal(first.claimed, true);
+  const second = s.decide(id, "declined", {});
+  assert.equal(second.status, "approved", "already decided is a no-op");
+  assert.equal(second.claimed, false);
   db.close();
 });
 

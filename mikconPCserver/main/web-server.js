@@ -24,6 +24,7 @@ import * as tg from "../agent/telegram.js";
 import { routersForPolling, routersFromSecureBlob } from "./agent-host.js";
 import { pollAll } from "../agent/poller.js";
 import { makePaymentApi } from "./payment-page.js";
+import { sanitizeBrand, mergeBrand, mergeGcash } from "./brand.js";
 import { makeReceiptStore, formatReceiptTelegram, receiptFromOutcome } from "../agent/receipt.js";
 import { makeRemittanceStore, summarizeDay } from "../agent/remittance.js";
 import { makeWatchdogStore } from "../agent/watchdog.js";
@@ -152,7 +153,7 @@ export function startHttpServer({
         const parsed = JSON.parse(r.value);
         payConfig = {
           gcash: (parsed && parsed.gcash) || {},
-          brand: (parsed && parsed.brand) || {},
+          brand: sanitizeBrand((parsed && parsed.brand) || {}),
           routerId: parsed && parsed.routerId || "",
         };
       }
@@ -231,10 +232,10 @@ export function startHttpServer({
 
   const reconnectOnRouter = makeReconnector(routerExec);
 
-  async function renewWallets(routers) {
+  async function renewWallets(routers, customersByRouter) {
     const today = clock.today();
     for (const router of routers || []) {
-      const rows = resolveCustomers(router.id) || [];
+      const rows = (customersByRouter && customersByRouter[router.id]) || resolveCustomers(router.id) || [];
       for (const c of rows) {
         const r = computeRenewal({ due: c.due, wallet: c.wallet, price: c.price, cycle: c.cycle, today });
         if (!r.rounds) continue;
@@ -249,6 +250,9 @@ export function startHttpServer({
             reconnect: reconnectSpec(c),
             shouldReconnect: true,
           });
+          c.due = r.newDue;
+          c.wallet = r.newWallet;
+          c.raw_comment = comment;
           for (let i = 0; i < r.rounds; i++) {
             recordPayment({
               router_id: router.id, customer_key: c.key, kind: c.kind, amount: c.price, at: today,
@@ -280,7 +284,7 @@ export function startHttpServer({
       routerNames = Object.fromEntries(named.map((r) => [r.id, r.name || r.id]));
       if (routers.length) {
         const polled = await pollAll({ db, client: routerExec, routers, clock });
-        await renewWallets(routers);
+        await renewWallets(routers, polled.customers);
         await runWatchdogPass({
           routers,
           failed: polled.failed,
@@ -522,15 +526,8 @@ export function startHttpServer({
               port: Number(b.config.port) || 0,
               routerId: b.config.routerId ? String(b.config.routerId) : "",
               host: "",
-              gcash: {
-                name: String((b.config.gcash && b.config.gcash.name) || ""),
-                number: String((b.config.gcash && b.config.gcash.number) || ""),
-                qrDataUrl: String((b.config.gcash && b.config.gcash.qrDataUrl) || ""),
-              },
-              brand: {
-                message: String((b.config.brand && b.config.brand.message) || ""),
-                bannerDataUrl: String((b.config.brand && b.config.brand.bannerDataUrl) || ""),
-              },
+              gcash: mergeGcash(payConfig.gcash, b.config.gcash),
+              brand: mergeBrand(payConfig.brand, b.config.brand),
             };
             await store.set("payreminder-config", JSON.stringify(clean));
             await loadPayConfig();
@@ -591,7 +588,7 @@ export function startHttpServer({
         }
         if (pathname === "/api/bridge/pay/listSales") {
           await loadPayConfig();
-          return send(res, 200, listSales(payConfig.routerId || b.routerId || ""));
+          return send(res, 200, listSales(b.routerId || payConfig.routerId || ""));
         }
         if (pathname === "/api/bridge/ops/receipts") {
           return send(res, 200, receipts.listRecent());

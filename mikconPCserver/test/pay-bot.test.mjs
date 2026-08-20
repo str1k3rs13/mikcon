@@ -21,7 +21,7 @@ function clone(arr) {
   return (arr || []).map((r) => ({ ...r }));
 }
 
-function setup({ resolveCustomersImpl, addressList = [], profiles, onApproved } = {}) {
+function setup({ resolveCustomersImpl, addressList = [], profiles, activeSessions = [], onApproved } = {}) {
   const db = openStore(":memory:");
   let seq = 0;
   const token = () => "tok" + (++seq);
@@ -54,6 +54,8 @@ function setup({ resolveCustomersImpl, addressList = [], profiles, onApproved } 
     switch (o.cmd) {
       case "/ppp/secret/print": return clone(FLEET.secrets);
       case "/ppp/secret/set": return [];
+      case "/ppp/active/print": return clone(activeSessions);
+      case "/ppp/active/remove": return [];
       case "/ppp/profile/print": return clone(profiles || [
         { ".id": "*P1", name: "Fibre 20 Mbps" },
         { ".id": "*P2", name: "Home 10 Mbps" },
@@ -103,6 +105,11 @@ test("pickUniqueProfileName refuses a plan that prefixes two profiles", () => {
   assert.match(hit.error, /more than one PPP profile/);
   assert.equal(pickUniqueProfileName(profiles, "Fibre 20").name, "Fibre 20");
   assert.equal(pickUniqueProfileName(profiles, "").reason, "empty");
+  assert.equal(
+    pickUniqueProfileName([{ name: "Home 10" }], "Home 10 Mbps").reason,
+    "missing",
+    "a longer plan name must not land on a shorter profile"
+  );
 });
 
 test("notify sends the encoded code and stores the message id", async () => {
@@ -138,7 +145,7 @@ test("authorized Approve of a pending matched ppp request reconnects and records
   await bot.handleUpdate(update);
 
   assert.equal(payStore.byId(id).status, "approved");
-  assert.equal(execCalls.length, 3, "secret lookup + profile lookup + secret set");
+  assert.equal(execCalls.length, 4, "secret lookup + profile lookup + secret set + active print");
   // The resolved router's connection params must reach exec. getRouter is async in production, so
   // this fails if pay-bot passes its Promise into reconnectOnRouter without awaiting it (spreading
   // a Promise yields {}, silently dropping host/port/credentials off the reconnect commands).
@@ -152,6 +159,8 @@ test("authorized Approve of a pending matched ppp request reconnects and records
   assert.equal(execCalls[2].attrs.profile, "Fibre 20 Mbps");
   assert.equal(execCalls[2].attrs.disabled, "no");
   assert.match(execCalls[2].attrs.comment, /\[bill/);
+  assert.equal(execCalls[3].cmd, "/ppp/active/print");
+  assert.deepEqual(execCalls[3].queries, { name: "ana" });
 
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].amount, 750);
@@ -167,11 +176,32 @@ test("authorized Approve of a pending matched ppp request reconnects and records
 
   // Telegram retry / double-tap: same callback_data replayed.
   await bot.handleUpdate(update);
-  assert.equal(execCalls.length, 3, "no second reconnect exec call");
+  assert.equal(execCalls.length, 4, "no second reconnect exec call");
   assert.equal(recorded.length, 1, "no second ledger row");
   assert.equal(tgCalls.editMessage.length, 1, "no second edit");
   assert.equal(tgCalls.answerCallback.length, 2);
   assert.match(tgCalls.answerCallback[1].text, /Already approved/);
+});
+
+test("PPPoE approve drops the live /ppp/active session by exact name so the new plan takes effect", async () => {
+  const ana = { kind: "ppp", key: "ana", name: "Ana Cruz", phone: "", plan: "Fibre 20 Mbps",
+    price: 750, cycle: "monthly", due: "2026-08-17", paid: "", bal: 0 };
+  const { payStore, bot, execCalls } = setup({
+    resolveCustomersImpl: (routerId) => (routerId === "r1" ? [ana] : []),
+    activeSessions: [
+      { ".id": "*A1", name: "ana" },
+      { ".id": "*A2", name: "ana-guest" },
+    ],
+  });
+  const { id } = payStore.create({
+    routerId: "r1", request: { account: "Ana Cruz", ref: "DROP1", amount: 750 }, customerKey: "ana", clientIp: "10.0.0.5",
+  });
+  const result = await bot.decideDirect(id, true);
+  assert.equal(result.ok, true);
+  const drop = execCalls.find((c) => c.cmd === "/ppp/active/remove");
+  assert.ok(drop, "must kick the live session after secret set");
+  assert.equal(drop.attrs[".id"], "*A1");
+  assert.equal(execCalls.filter((c) => c.cmd === "/ppp/active/remove").length, 1, "must not drop a similarly named session");
 });
 
 test("Approve from a wrong chat is rejected before touching the store or the router", async () => {
@@ -377,10 +407,11 @@ test("decideDirect approve: reconnects on the router, records the payment, and d
 
   assert.deepEqual(result, { ok: true, status: "approved" });
   assert.equal(payStore.byId(id).status, "approved");
-  assert.equal(execCalls.length, 3, "secret lookup + profile lookup + secret set, same as an approve via handleUpdate");
+  assert.equal(execCalls.length, 4, "secret lookup + profile lookup + secret set + active print, same as an approve via handleUpdate");
   assert.equal(execCalls[0].cmd, "/ppp/secret/print");
   assert.equal(execCalls[1].cmd, "/ppp/profile/print");
   assert.equal(execCalls[2].cmd, "/ppp/secret/set");
+  assert.equal(execCalls[3].cmd, "/ppp/active/print");
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0].ref, "DIRA");
   assert.equal(recorded[0].amount, 750);
@@ -464,12 +495,12 @@ test("a second decideDirect on an already-decided row is a no-op — no second r
 
   const first = await bot.decideDirect(id, true);
   assert.equal(first.ok, true);
-  assert.equal(execCalls.length, 3);
+  assert.equal(execCalls.length, 4);
   assert.equal(recorded.length, 1);
 
   const second = await bot.decideDirect(id, true);
   assert.deepEqual(second, { ok: false, reason: "not pending" });
-  assert.equal(execCalls.length, 3, "a second decideDirect reconnected again");
+  assert.equal(execCalls.length, 4, "a second decideDirect reconnected again");
   assert.equal(recorded.length, 1, "a second decideDirect recorded a second ledger row");
 
   // A decline after an approve is decided is the same no-op, from the other direction.
@@ -500,12 +531,12 @@ test("handleUpdate and decideDirect share one idempotency guard: whichever decid
   // The in-app decide lands first...
   const direct = await bot.decideDirect(id, true);
   assert.equal(direct.ok, true);
-  assert.equal(execCalls.length, 3);
+  assert.equal(execCalls.length, 4);
   assert.equal(recorded.length, 1);
 
   // ...so the Telegram tap that follows must be a no-op, exactly like a real double-tap.
   await bot.handleUpdate(callbackUpdate({ id: "cb-race", data: "ok:" + code }));
-  assert.equal(execCalls.length, 3, "handleUpdate reconnected again after decideDirect already decided");
+  assert.equal(execCalls.length, 4, "handleUpdate reconnected again after decideDirect already decided");
   assert.equal(recorded.length, 1, "handleUpdate recorded a second ledger row after decideDirect already decided");
 });
 

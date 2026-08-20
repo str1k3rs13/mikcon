@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lastNameKeys, matchesLastName, normalizeLastName, matchesFirstName, last4Phone, matchesAccount, amountDue, publicCustomerCard } from "../agent/last-name.js";
+import { lastNameKeys, matchesLastName, normalizeLastName, matchesFirstName, last4Phone, matchesAccount, amountDue, publicCustomerCard, serviceStatus } from "../agent/last-name.js";
 
 test("normalizeLastName trims and rejects junk", () => {
   assert.equal(normalizeLastName("  Cruz  "), "Cruz");
@@ -46,6 +46,14 @@ test("amountDue is price minus already-paid bal", () => {
   assert.equal(amountDue({ price: 750, bal: 250 }), 500);
   assert.equal(amountDue({ price: 750, bal: 0 }), 750);
   assert.equal(amountDue({ price: 750, bal: 900 }), 0);
+});
+
+test("serviceStatus reports active, due today, and expired from the due date", () => {
+  assert.equal(serviceStatus({ due: "2026-09-01", today: "2026-08-19" }).kind, "ok");
+  assert.equal(serviceStatus({ due: "2026-09-01", today: "2026-08-19" }).days, 13);
+  assert.equal(serviceStatus({ due: "2026-08-19", today: "2026-08-19" }).kind, "due");
+  assert.equal(serviceStatus({ due: "2026-08-01", today: "2026-08-19" }).kind, "over");
+  assert.equal(serviceStatus({ due: "", today: "2026-08-19" }).kind, "unknown");
 });
 
 test("publicCustomerCard does not leak the router key", () => {

@@ -6,14 +6,14 @@ Works on **Windows**, **Linux**, **Raspberry Pi**, and **Orange Pi**.
 
 | File | What it is |
 |---|---|
-| [MIKCON-3.16.12.apk](releases/MIKCON-3.16.12.apk) | Android app |
+| [MIKCON-3.16.13.apk](releases/MIKCON-3.16.13.apk) | Android app |
 | Windows `.exe` | PC installer — on the [Releases](https://github.com/str1k3rs13/mikcon/releases) page |
 
 ---
 
 ## Android
 
-1. Download **[MIKCON-3.16.12.apk](releases/MIKCON-3.16.12.apk)** on the phone.
+1. Download **[MIKCON-3.16.13.apk](releases/MIKCON-3.16.13.apk)** on the phone.
 2. Open it and allow install from that source.
 3. Sign in. Owner pack is **1 Android + 1 Windows**. Existing paid keys stay valid.
 
