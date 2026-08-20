@@ -19,11 +19,13 @@ if [ ! -f "$SRC_SERVER/server.mjs" ] || [ ! -f "$SRC_WWW/index.html" ]; then
 fi
 
 # Lite images are ~2 GB. Node 22 + Tailscale + MIKCON does not fit.
-need=$((4 * 1024 * 1024 * 1024))
+need=$((5 * 1024 * 1024 * 1024))
 cur=$(stat -c%s "$IMG" 2>/dev/null || stat -f%z "$IMG")
 if [ "$cur" -lt "$need" ]; then
-  echo "inject: growing image to 4G ($cur -> $need)"
-  truncate -s 4G "$IMG"
+  echo "inject: growing image to 5G ($cur -> $need)"
+  truncate -s 5G "$IMG"
+  # Armbian is GPT: the backup header must move to the new end before growpart.
+  sgdisk -e "$IMG" >/dev/null 2>&1 || true
 fi
 
 LOOP=$(losetup -P -f --show "$IMG")
@@ -110,40 +112,55 @@ printf "uninitialized\n" > "$ROOT/etc/machine-id"
 rm -f "$ROOT/var/lib/dbus/machine-id"
 rm -f "$ROOT/root/.not_logged_in_yet"
 
-cp /usr/bin/qemu-aarch64-static "$ROOT/usr/bin/qemu-aarch64-static"
-if [ -f /etc/resolv.conf ]; then
-  mkdir -p "$ROOT/run/systemd/resolve" "$ROOT/etc"
-  cp /etc/resolv.conf "$ROOT/etc/resolv.conf" || true
+# Install Node and Tailscale as arm64 binaries on the host. qemu-user apt/DNS
+# fails on Armbian (getaddrinfo EBUSY) even when Pi OS chroot works.
+if [ ! -x "$ROOT/usr/bin/node" ] && [ ! -x "$ROOT/usr/local/bin/node" ]; then
+  echo "inject: installing Node 22 linux-arm64 into the image"
+  mkdir -p /tmp/mikcon-flash "$ROOT/usr/local"
+  sums=$(curl -fsSL https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt)
+  ntar=$(printf "%s\n" "$sums" | awk '/linux-arm64.tar.xz$/{print $2; exit}')
+  [ -n "$ntar" ] || { echo "inject: could not resolve Node 22 arm64 tarball" >&2; exit 1; }
+  curl -fL --retry 4 -o /tmp/mikcon-flash/node.tar.xz "https://nodejs.org/dist/latest-v22.x/$ntar"
+  tar -xJf /tmp/mikcon-flash/node.tar.xz -C "$ROOT/usr/local" --strip-components=1
+  ln -sf /usr/local/bin/node "$ROOT/usr/bin/node"
+  ln -sf /usr/local/bin/npm "$ROOT/usr/bin/npm"
 fi
-mount -t proc proc "$ROOT/proc"
-mount -t sysfs sys "$ROOT/sys"
-mount --bind /dev "$ROOT/dev"
-mkdir -p "$ROOT/dev/pts"
-mount --bind /dev/pts "$ROOT/dev/pts" 2>/dev/null || true
 
-chroot "$ROOT" /usr/bin/qemu-aarch64-static /bin/sh -s <<'CHROOT'
-set -e
-export DEBIAN_FRONTEND=noninteractive
-apt-get clean || true
-if ! command -v curl >/dev/null 2>&1; then
-  apt-get update -y
-  apt-get install -y --no-install-recommends curl ca-certificates
+if [ ! -x "$ROOT/usr/sbin/tailscaled" ] && [ ! -x "$ROOT/usr/bin/tailscaled" ]; then
+  echo "inject: installing Tailscale arm64 into the image"
+  mkdir -p /tmp/mikcon-flash/ts
+  tsurl="https://pkgs.tailscale.com/stable/tailscale_latest_arm64.tgz"
+  if ! curl -fL --retry 2 -o /tmp/mikcon-flash/tailscale.tgz "$tsurl"; then
+    tsurl=$(curl -fsSL https://api.github.com/repos/tailscale/tailscale/releases/latest | sed -n 's/.*"browser_download_url": "\([^"]*arm64\.tgz\)".*/\1/p' | head -1)
+    [ -n "$tsurl" ] && curl -fL --retry 4 -o /tmp/mikcon-flash/tailscale.tgz "$tsurl" || tsurl=""
+  fi
+  if [ -f /tmp/mikcon-flash/tailscale.tgz ]; then
+    tar -xzf /tmp/mikcon-flash/tailscale.tgz -C /tmp/mikcon-flash/ts
+    tsd=$(find /tmp/mikcon-flash/ts -type f -name tailscaled | head -1)
+    tsc=$(find /tmp/mikcon-flash/ts -type f -name tailscale | head -1)
+    [ -n "$tsd" ] && install -m 755 "$tsd" "$ROOT/usr/sbin/tailscaled"
+    [ -n "$tsc" ] && install -m 755 "$tsc" "$ROOT/usr/bin/tailscale"
+    mkdir -p "$ROOT/lib/systemd/system" "$ROOT/etc/systemd/system/multi-user.target.wants" "$ROOT/var/lib/tailscale"
+    unit=$(find /tmp/mikcon-flash/ts -name tailscaled.service | head -1)
+    if [ -n "$unit" ]; then
+      install -m 644 "$unit" "$ROOT/lib/systemd/system/tailscaled.service"
+    else
+      cat > "$ROOT/lib/systemd/system/tailscaled.service" <<'UNIT'
+[Unit]
+Description=Tailscale node agent
+After=network-pre.target
+Wants=network-pre.target
+[Service]
+ExecStart=/usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+    fi
+    ln -sf /lib/systemd/system/tailscaled.service "$ROOT/etc/systemd/system/multi-user.target.wants/tailscaled.service"
+  else
+    echo "inject: Tailscale skipped (install later with curl | sh && sudo tailscale up)"
+  fi
 fi
-if ! command -v node >/dev/null 2>&1; then
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  apt-get install -y nodejs
-fi
-apt-get install -y --no-install-recommends avahi-daemon openssl || true
-if ! command -v tailscale >/dev/null 2>&1; then
-  curl -fsSL https://tailscale.com/install.sh | sh || echo "inject: Tailscale skipped (install later with sudo tailscale up)"
-fi
-systemctl enable tailscaled || true
-cd /opt/mikcon/mikconPCserver
-node scripts/sync-web.mjs || true
-node -e "var v=process.versions.node.split('.').map(Number); if (v[0]<22 || (v[0]===22 && v[1]<5)) process.exit(1)"
-apt-get clean || true
-rm -rf /var/lib/apt/lists/*
-CHROOT
 
-rm -f "$ROOT/usr/bin/qemu-aarch64-static"
 echo "inject: baked $IMG"

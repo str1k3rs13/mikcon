@@ -3,6 +3,12 @@ permissions:
   contents: write
 on:
   workflow_dispatch:
+    inputs:
+      board:
+        description: Which image to bake
+        type: choice
+        default: all
+        options: [all, raspberrypi, orangepi5]
   push:
     branches: [main]
     paths:
@@ -13,12 +19,13 @@ on:
 
 jobs:
   raspberrypi:
+    if: github.event_name != 'workflow_dispatch' || inputs.board == 'all' || inputs.board == 'raspberrypi'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Tools
-        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils gdisk
       - name: Download Raspberry Pi OS Lite 64-bit
         run: |
           mkdir -p work
@@ -47,12 +54,13 @@ jobs:
           fi
 
   orangepi5:
+    if: github.event_name != 'workflow_dispatch' || inputs.board == 'all' || inputs.board == 'orangepi5'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - name: Tools
-        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils
+        run: sudo apt-get update -y && sudo apt-get install -y qemu-user-static binfmt-support kpartx parted rsync xz-utils unzip openssl ca-certificates curl e2fsprogs cloud-guest-utils gdisk
       - name: Download Armbian Orange Pi 5
         run: |
           mkdir -p work
