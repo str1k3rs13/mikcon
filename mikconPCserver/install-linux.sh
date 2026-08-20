@@ -85,7 +85,7 @@ Type=simple
 User=$RUN_USER
 WorkingDirectory=$HERE
 ExecStart=$NODE_BIN server.mjs
-Restart=on-failure
+Restart=always
 RestartSec=3
 Environment=PORT=8787
 
@@ -115,6 +115,10 @@ systemctl --no-pager --full status mikcon-pc-server | sed -n '1,18p' || true
 echo
 echo "Open  http://127.0.0.1:8787"
 echo "First login  1234  then set a new password."
+echo
+echo "Always running after reboot: mikcon-pc-server is systemd enabled."
+echo "  systemctl is-enabled mikcon-pc-server    # must print: enabled"
+echo "  systemctl is-active mikcon-pc-server     # must print: active"
 echo
 echo "Tailscale (optional, same account as your phone):"
 echo "  sudo tailscale up"

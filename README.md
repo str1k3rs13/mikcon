@@ -23,13 +23,16 @@ The phone can talk to the PC server on the same Wi-Fi, Tailscale, or Cloudflare.
 
 ## Windows
 
-### A. Installer (easiest)
+### A. Installer (easiest — stays on after reboot)
 
 1. Open **[Releases](https://github.com/str1k3rs13/mikcon/releases)** and download the `.exe`.
 2. Run it. Windows may say it is unrecognized — choose **More info → Run anyway**.
 3. Open the printed URL, or `http://127.0.0.1:8787`.
+4. The installed app starts with Windows (tray). Leave the PC on.
 
-### B. One command (CMD or PowerShell)
+### B. One command (CMD or PowerShell) — **not** always-on
+
+This path only runs while that window stays open. Close the window or reboot and the server stops. For always-on, use the installer above.
 
 Install [Node.js 22 LTS](https://nodejs.org) first (22.5 or newer). Open a **new** terminal after installing Node.
 
@@ -63,7 +66,7 @@ Flash, boot, set the password. That is the whole install.
 6. On a phone on the same Wi-Fi open **http://mikcon.local:8787** or **http://BOARD-IP:8787**
 7. Login **1234**, then type your new password
 
-Tailscale is already installed on the image. With an auth key it logs in by itself; the server is also on **http://100.x.x.x:8787**. Without a key, on HDMI/SSH run `sudo tailscale up`.
+The flash image starts MIKCON on every boot (systemd). Leave the board powered. Tailscale is already installed. With an auth key it logs in by itself; the server is also on **http://100.x.x.x:8787**. Without a key, on HDMI/SSH run `sudo tailscale up`.
 
 HDMI shows the same URL. Each flash is a new machine for the license — do not clone a running card.
 
@@ -80,7 +83,16 @@ sudo sh mikcon/mikconPCserver/install-linux.sh
 
 Open `http://127.0.0.1:8787` or `http://LAN-IP:8787`. First login **1234**, then set a new password.
 
-Foreground only (no systemd):
+**Always running after reboot.** `install-linux.sh` enables `mikcon-pc-server` as a systemd service (`Restart=always`). Leave the PC/Pi powered on. You do not keep a terminal open.
+
+```bash
+systemctl is-enabled mikcon-pc-server
+systemctl is-active mikcon-pc-server
+```
+
+Both must print `enabled` and `active`. After a reboot, open the same URL again — do not run `git clone` again.
+
+Foreground only (no systemd — **stops when you close the terminal or reboot**):
 
 ```bash
 git clone https://github.com/str1k3rs13/mikcon.git && sh mikcon/mikconPCserver/start.sh
@@ -155,6 +167,27 @@ npm start -- --tailscale
 - Linux / Pi: `~/.mikcon-pc-server`
 
 ---
+
+## Always running (reboot)
+
+| Install | Survives reboot? |
+|---|---|
+| Linux `install-linux.sh` | **Yes** — `systemctl enable --now mikcon-pc-server` |
+| Raspberry Pi / Orange Pi flash image | **Yes** — baked systemd |
+| Windows installer `.exe` | **Yes** — starts with Windows |
+| `start.sh` / `npm run up` in a terminal | **No** — dies when the window closes or the PC reboots |
+
+The machine itself must stay powered on. A reboot of the OS is fine; a power-off is not.
+
+Check Linux:
+
+```bash
+systemctl is-enabled mikcon-pc-server
+systemctl is-active mikcon-pc-server
+sudo reboot
+# after it comes back:
+systemctl is-active mikcon-pc-server
+```
 
 ## Need help
 
