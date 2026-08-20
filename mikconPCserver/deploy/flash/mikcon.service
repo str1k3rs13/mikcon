@@ -1,12 +1,12 @@
 [Unit]
 Description=MikconPC Server
-After=network-online.target mikcon-firstboot.service
-Wants=network-online.target mikcon-firstboot.service
+After=network-online.target mikcon-firstboot.service tailscaled.service
+Wants=network-online.target mikcon-firstboot.service tailscaled.service
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/mikcon/mikconPCserver
-ExecStart=/usr/bin/node server.mjs
+ExecStart=/usr/bin/node server.mjs --tailscale
 Restart=on-failure
 RestartSec=3
 Environment=PORT=8787

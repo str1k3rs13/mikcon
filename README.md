@@ -57,10 +57,13 @@ Flash, boot, set the password. That is the whole install.
    - Raspberry Pi 3 / 4 / 5: **mikcon-raspberrypi-arm64.img.xz**
    - Orange Pi 5: **mikcon-orangepi5-arm64.img.xz**
 2. Open [Balena Etcher](https://etcher.balena.io) and flash it to an 8 GB+ microSD
-3. Optional Wi-Fi: plug the card back into the PC, edit `mikcon-wifi.txt` on the boot drive (`ssid=` and `psk=`), eject
-4. Boot the board
-5. On a phone on the same Wi-Fi open **http://mikcon.local:8787** or **http://BOARD-IP:8787**
-6. Login **1234**, then type your new password
+3. Optional Wi-Fi: plug the card back into the PC, edit `mikcon-wifi.txt` on the boot drive (`ssid=` and `psk=`)
+4. Optional Tailscale: on that same boot drive edit `mikcon-tailscale.txt` and set `auth-key=` to a reusable key from https://login.tailscale.com/admin/settings/keys
+5. Eject, boot the board
+6. On a phone on the same Wi-Fi open **http://mikcon.local:8787** or **http://BOARD-IP:8787**
+7. Login **1234**, then type your new password
+
+Tailscale is already installed on the image. With an auth key it logs in by itself; the server is also on **http://100.x.x.x:8787**. Without a key, on HDMI/SSH run `sudo tailscale up`.
 
 HDMI shows the same URL. Each flash is a new machine for the license — do not clone a running card.
 

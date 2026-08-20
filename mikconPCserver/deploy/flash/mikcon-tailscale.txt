@@ -1,0 +1,9 @@
+# MIKCON Tailscale (optional)
+# Flash the image, then open this SD card on your PC and paste a reusable auth key.
+# Create one at https://login.tailscale.com/admin/settings/keys
+# (reusable, not ephemeral). Save, eject, boot. Tailscale logs in by itself.
+#
+# If you leave this commented, Tailscale is still installed. On HDMI/SSH run:
+#   sudo tailscale up
+#
+#auth-key=tskey-auth-REPLACE-ME

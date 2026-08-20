@@ -78,6 +78,7 @@ chmod +x "$ROOT/opt/mikcon/mikconPCserver/deploy/flash/first-boot.sh" "$ROOT/opt
 for boot in "$ROOT/boot/firmware" "$ROOT/boot"; do
   if [ -d "$boot" ]; then
     cp "$SCRIPT_DIR/mikcon-wifi.txt" "$boot/mikcon-wifi.txt"
+    cp "$SCRIPT_DIR/mikcon-tailscale.txt" "$boot/mikcon-tailscale.txt"
   fi
 done
 
@@ -109,6 +110,10 @@ if ! command -v node >/dev/null 2>&1; then
   apt-get install -y nodejs
 fi
 apt-get install -y --no-install-recommends avahi-daemon openssl
+if ! command -v tailscale >/dev/null 2>&1; then
+  curl -fsSL https://tailscale.com/install.sh | sh
+fi
+systemctl enable tailscaled || true
 if id root >/dev/null 2>&1; then
   echo "root:1234" | chpasswd || true
 fi

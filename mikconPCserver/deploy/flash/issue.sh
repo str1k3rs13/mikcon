@@ -9,13 +9,22 @@ if [ -z "$ip" ]; then
 fi
 if [ -z "$ip" ]; then ip="THE-PI-LAN-IP"; fi
 
+ts=""
+if command -v tailscale >/dev/null 2>&1; then
+  ts=$(tailscale ip -4 2>/dev/null | head -n 1)
+fi
+
 text="
 MIKCON is running.
 Open:  http://${ip}:8787
 First login:  1234
 Then type your new password on that page.
+"
+if [ -n "$ts" ]; then
+  text="${text}Tailscale:  http://${ts}:8787
 
 "
+fi
 mkdir -p /etc/issue.d
 printf "%s" "$text" > /etc/issue.d/mikcon.issue
 printf "%s" "$text" > /etc/motd

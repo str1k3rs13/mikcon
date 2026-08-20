@@ -10,9 +10,12 @@ Images are built on GitHub Actions and attached to [Releases](https://github.com
 2. Open [Balena Etcher](https://etcher.balena.io)
 3. Flash it to a 8 GB+ microSD
 4. Optional Wi-Fi: put the card back in the PC, edit `mikcon-wifi.txt` on the boot drive (`ssid=` and `psk=`), eject
-5. Boot the Pi with ethernet or that Wi-Fi
-6. On a phone on the same network open **http://mikcon.local:8787** or **http://PI-IP:8787**
-7. Login **1234**, then type your new password
+5. Optional Tailscale: on that same boot drive edit `mikcon-tailscale.txt` and set `auth-key=` to a reusable key from https://login.tailscale.com/admin/settings/keys
+6. Boot the Pi with ethernet or that Wi-Fi
+7. On a phone on the same network open **http://mikcon.local:8787** or **http://PI-IP:8787**
+8. Login **1234**, then type your new password
+
+Tailscale is already installed. With an auth key it joins by itself and the server is also on `http://100.x.x.x:8787`. Without a key, plug in a screen/SSH and run `sudo tailscale up`.
 
 HDMI shows the same URL if you plug in a screen.
 

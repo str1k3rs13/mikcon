@@ -62,5 +62,32 @@ fi
 
 hostnamectl set-hostname mikcon 2>/dev/null || true
 
+apply_tailscale() {
+  key=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      \#*|"");;
+      auth-key=*) key=${line#auth-key=} ;;
+    esac
+  done < "$1"
+  key=$(printf "%s" "$key" | tr -d " \r")
+  [ -n "$key" ] || return 0
+  command -v tailscale >/dev/null 2>&1 || return 0
+  mid=$(tr -d " \n\r" < /etc/machine-id 2>/dev/null || true)
+  ts_host="mikcon"
+  if [ -n "$mid" ] && [ "$mid" != "uninitialized" ]; then
+    ts_host="mikcon-$(printf "%s" "$mid" | cut -c1-6)"
+  fi
+  tailscale up --auth-key="$key" --hostname="$ts_host" --accept-dns=false --ssh=false || true
+}
+
+ts_file=""
+for f in /boot/firmware/mikcon-tailscale.txt /boot/mikcon-tailscale.txt; do
+  if [ -f "$f" ]; then ts_file="$f"; break; fi
+done
+if [ -n "$ts_file" ]; then
+  apply_tailscale "$ts_file" || true
+fi
+
 mkdir -p /var/lib/mikcon-pc-server
 exit 0

@@ -32,4 +32,18 @@ if ! node_ok; then
   fi
 fi
 
-npm run up
+if ! command -v tailscale >/dev/null 2>&1; then
+  echo "Installing Tailscale (needs sudo)..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://tailscale.com/install.sh | sudo sh
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- https://tailscale.com/install.sh | sudo sh
+  fi
+fi
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable --now tailscaled 2>/dev/null || true
+fi
+
+npm install --omit=dev
+node scripts/sync-web.mjs
+exec node server.mjs --tailscale

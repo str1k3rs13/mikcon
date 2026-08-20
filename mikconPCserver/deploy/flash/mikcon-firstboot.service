@@ -1,8 +1,8 @@
 [Unit]
 Description=MIKCON first boot (Wi-Fi, unique license id)
-After=network-online.target NetworkManager.service
+After=network-online.target NetworkManager.service tailscaled.service
 Before=mikcon.service
-Wants=network-online.target
+Wants=network-online.target tailscaled.service
 
 [Service]
 Type=oneshot
