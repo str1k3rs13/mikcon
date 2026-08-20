@@ -1,0 +1,27 @@
+appId: com.jeffnet.mikconpcserver
+productName: MikconPC Server
+directories:
+  output: dist
+  buildResources: build
+# An explicit list, so anything main/ imports must be added here deliberately. agent/ was
+# missed when it landed and the packaged app died on startup with ERR_MODULE_NOT_FOUND before
+# it drew a window - dev and the smoke harness both run from source, so neither could see it.
+# test/packaging.test.mjs now walks main.js's import graph against these globs.
+files:
+  - main/**/*
+  - agent/**/*
+  - app/www/**/*
+  - public/**/*
+  - package.json
+win:
+  target:
+    - nsis
+    - portable
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: MikconPC-Server-Setup-${version}.${ext}
+portable:
+  artifactName: MikconPC-Server-${version}.${ext}

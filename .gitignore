@@ -1,0 +1,11 @@
+node_modules/
+dist/
+win-unpacked/
+*.exe
+*.blockmap
+*.keystore
+keystore.properties
+.DS_Store
+Thumbs.db
+*.log
+.env

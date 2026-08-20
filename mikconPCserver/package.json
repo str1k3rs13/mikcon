@@ -1,0 +1,29 @@
+{
+  "name": "mikcon-pc-server",
+  "version": "3.16.11",
+  "description": "MikconPC Server — always-on web controller for Windows and Linux.",
+  "private": true,
+  "type": "module",
+  "main": "main/main.js",
+  "scripts": {
+    "sync": "node scripts/sync-web.mjs",
+    "start": "node scripts/sync-web.mjs && node server.mjs",
+    "up": "npm install --omit=dev && node scripts/sync-web.mjs && node server.mjs",
+    "dev": "node scripts/sync-web.mjs && node server.mjs",
+    "electron": "node scripts/sync-web.mjs && electron .",
+    "test": "node --test \"test/*.test.mjs\"",
+    "test:smoke": "node scripts/sync-web.mjs && node test/smoke/run.mjs",
+    "test:smoke:fixture": "electron test/smoke/make-fixture.js",
+    "make:tray-icon": "electron scripts/make-tray-icon.cjs",
+    "audit:soft": "npm audit || exit 0",
+    "build": "node scripts/sync-web.mjs && npm run audit:soft && node scripts/package.mjs",
+    "postinstall": "node scripts/postinstall.mjs"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "devDependencies": {
+    "electron": "43.3.0",
+    "electron-builder": "26.15.3"
+  }
+}
