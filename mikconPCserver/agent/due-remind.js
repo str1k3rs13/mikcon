@@ -64,6 +64,19 @@ export function nextReminder({ customer, today, already }) {
   };
 }
 
+export function formatRemindSms(row, { payUrl, site } = {}) {
+  const lines = [
+    "Bill reminder",
+    String(row.name || row.key || "Customer"),
+    "Due " + String(row.when || row.stage) + " (" + String(row.due) + ")",
+    "Amount " + peso(row.amount),
+  ];
+  if (row.plan) lines.push("Plan " + String(row.plan));
+  if (site) lines.push(String(site));
+  if (payUrl) lines.push("Pay at " + String(payUrl));
+  return lines.join("\n");
+}
+
 export function formatRemindTelegram(row, { esc, payUrl, site } = {}) {
   const e = typeof esc === "function" ? esc : (s) => String(s == null ? "" : s);
   const lines = [

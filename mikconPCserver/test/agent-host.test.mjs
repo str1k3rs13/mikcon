@@ -208,9 +208,8 @@ test("unlocked, the poller visits every configured router with a real host", asy
   const host = startAgentHost(d.args);
   try {
     await host.pollOnce();
-    // The health check sweeps both routers first, then the poll reads three sources from each:
-    // ppp secrets, dhcp leases, and simple queues - the third added in Stage 3, without which
-    // statically-addressed customers are invisible.
+    // The health check sweeps both routers first, then the poll reads secrets, leases, queues,
+    // and live PPP sessions (Map active/inactive) from each.
     assert.deepEqual(calls.map((c) => [c.host, c.cmd]), [
       ["10.0.0.1", "/system/script/print"],
       ["10.0.0.1", "/system/scheduler/print"],
@@ -219,9 +218,11 @@ test("unlocked, the poller visits every configured router with a real host", asy
       ["10.0.0.1", "/ppp/secret/print"],
       ["10.0.0.1", "/ip/dhcp-server/lease/print"],
       ["10.0.0.1", "/queue/simple/print"],
+      ["10.0.0.1", "/ppp/active/print"],
       ["10.0.0.2", "/ppp/secret/print"],
       ["10.0.0.2", "/ip/dhcp-server/lease/print"],
       ["10.0.0.2", "/queue/simple/print"],
+      ["10.0.0.2", "/ppp/active/print"],
     ]);
     for (const c of calls) assert.match(c.cmd, /\/print$/, "the poller must observe only");
     assert.equal(host.getState().locked, false);

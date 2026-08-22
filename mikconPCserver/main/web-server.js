@@ -30,8 +30,17 @@ import { makeRemittanceStore, summarizeDay } from "../agent/remittance.js";
 import { makeWatchdogStore } from "../agent/watchdog.js";
 import { makeJobStore } from "../agent/job-ticket.js";
 import { makeDueRemindStore } from "../agent/due-remind.js";
+import { makeClientSiteStore } from "../agent/client-site.js";
 import { runWatchdogPass } from "./ops-watch.js";
 import { runDueRemindPass } from "./ops-remind.js";
+import {
+  DEFAULT_SMS,
+  mergeSmsConfig,
+  publicSmsConfig,
+  canSendSms,
+  sendSms as sendGatewaySms,
+  listSerialPorts,
+} from "../agent/sms-send.js";
 import {
   normalizeGatewayConfig,
   mergeGatewayConfig,
@@ -141,10 +150,19 @@ export function startHttpServer({
   const watchdog = makeWatchdogStore(db);
   const jobs = makeJobStore({ db, clock });
   const dueReminds = makeDueRemindStore(db);
+  const sites = makeClientSiteStore({ db, clock });
   let routerNames = {};
   let payConfig = { gcash: {}, brand: {} };
   let gatewayCfg = normalizeGatewayConfig({});
+  let smsCfg = mergeSmsConfig(DEFAULT_SMS, {});
   const tgCfg = { token: "", chatId: "" };
+
+  async function loadSmsConfig() {
+    try {
+      const r = await store.get("sms-gateway");
+      if (r && r.found && r.value) smsCfg = mergeSmsConfig(DEFAULT_SMS, JSON.parse(r.value));
+    } catch { /* missing config is fine */ }
+  }
 
   async function loadPayConfig() {
     try {
@@ -297,12 +315,16 @@ export function startHttpServer({
           exportDir: path.join(dataDir, "exports"),
         });
         const payBase = String(gatewayCfg.publicBaseUrl || "").replace(/\/+$/, "");
+        await loadSmsConfig();
         await runDueRemindPass({
           customers: polled.customers,
           names: routerNames,
           store: dueReminds,
           clock,
           sendAlert: sendOpsTelegram,
+          sendSms: canSendSms(smsCfg)
+            ? (msg) => sendGatewaySms(smsCfg, { number: msg && msg.number, body: msg && msg.body })
+            : undefined,
           payUrl: payBase ? payBase + "/payment" : "",
           esc: tg.esc,
         });
@@ -369,6 +391,7 @@ export function startHttpServer({
   }
 
   loadPayConfig();
+  loadSmsConfig();
   loadGateway();
   loadTelegram().then(function () {
     if (gatewayCfg.gcashManual && tgCfg.token && tgCfg.chatId) {
@@ -459,7 +482,7 @@ export function startHttpServer({
       if (pathname === "/mikcon-digest.js") {
         return send(res, 200, digestBrowserScript(), { "Content-Type": "text/javascript; charset=utf-8" });
       }
-      if (pathname === "/mikcon-server-shim.js") {
+      if (pathname === "/mikcon-server-shim.js" || pathname.startsWith("/mikcon-server-shim.js")) {
         const file = path.join(publicDir, "mikcon-server-shim.js");
         return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
       }
@@ -467,9 +490,50 @@ export function startHttpServer({
         const file = path.join(publicDir, "payment-gateway.js");
         return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
       }
-      if (pathname === "/ops-desk.js") {
+      if (pathname === "/ops-desk.js" || pathname.startsWith("/ops-desk.js")) {
         const file = path.join(publicDir, "ops-desk.js");
         return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
+      }
+      if (pathname === "/plant-map.js" || pathname.startsWith("/plant-map.js")) {
+        const file = path.join(publicDir, "plant-map.js");
+        return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
+      }
+      if (pathname === "/settings-desk.js" || pathname.startsWith("/settings-desk.js")) {
+        const file = path.join(publicDir, "settings-desk.js");
+        return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
+      }
+      if (pathname === "/sms-desk.js" || pathname.startsWith("/sms-desk.js")) {
+        const file = path.join(publicDir, "sms-desk.js");
+        return send(res, 200, fs.readFileSync(file), { "Content-Type": "text/javascript; charset=utf-8" });
+      }
+      if (pathname.startsWith("/leaflet/")) {
+        const file = safeJoin(path.join(publicDir, "leaflet"), pathname.slice("/leaflet".length) || "/");
+        if (!file || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+          return send(res, 404, "not found", { "Content-Type": "text/plain" });
+        }
+        const ext = path.extname(file).toLowerCase();
+        return send(res, 200, fs.readFileSync(file), { "Content-Type": TYPES[ext] || "application/octet-stream" });
+      }
+      if (pathname.startsWith("/map-tiles/")) {
+        const m = /^\/map-tiles\/(\d+)\/(\d+)\/(\d+)\.png$/.exec(pathname);
+        if (!m) return send(res, 400, "bad tile", { "Content-Type": "text/plain" });
+        const z = Number(m[1]);
+        const x = Number(m[2]);
+        const y = Number(m[3]);
+        const max = 2 ** z;
+        if (z > 19 || x < 0 || y < 0 || x >= max || y >= max) {
+          return send(res, 400, "bad tile", { "Content-Type": "text/plain" });
+        }
+        try {
+          const r = await fetch("https://tile.openstreetmap.org/" + z + "/" + x + "/" + y + ".png", {
+            headers: { "User-Agent": "MikconPC-Server/3.16.13 (WISP map)" },
+          });
+          if (!r.ok) return send(res, r.status, "tile error", { "Content-Type": "text/plain" });
+          const buf = Buffer.from(await r.arrayBuffer());
+          return send(res, 200, buf, { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" });
+        } catch {
+          return send(res, 502, "tile unavailable", { "Content-Type": "text/plain" });
+        }
       }
 
       if (pathname.startsWith("/api/")) {
@@ -652,6 +716,53 @@ export function startHttpServer({
             today: clock.today(),
             rows: dueReminds.listRecent(50),
           });
+        }
+        if (pathname === "/api/bridge/ops/sites") {
+          await loadPayConfig();
+          const qid = req.method === "GET"
+            ? String((url.searchParams && url.searchParams.get("router_id")) || "")
+            : String((b && b.router_id) || "");
+          const rid = qid || payConfig.routerId || "";
+          if (req.method === "GET") {
+            return send(res, 200, {
+              today: clock.today(),
+              rows: sites.list(rid),
+              customers: sites.customers(rid),
+            });
+          }
+          const saved = sites.save({ ...(b || {}), router_id: rid });
+          if (!saved.ok) return send(res, 400, saved);
+          return send(res, 200, saved);
+        }
+        if (pathname === "/api/bridge/ops/sites/delete") {
+          await loadPayConfig();
+          const rid = String((b && b.router_id) || payConfig.routerId || "");
+          return send(res, 200, sites.remove(rid, b && b.customer_key));
+        }
+        if (pathname === "/api/bridge/ops/sms/status") {
+          await loadSmsConfig();
+          return send(res, 200, publicSmsConfig(smsCfg));
+        }
+        if (pathname === "/api/bridge/ops/sms/ports") {
+          const ports = await listSerialPorts();
+          return send(res, 200, { ok: true, ports });
+        }
+        if (pathname === "/api/bridge/ops/sms/config") {
+          if (req.method !== "POST") return send(res, 405, { ok: false, error: "POST only" });
+          await loadSmsConfig();
+          smsCfg = mergeSmsConfig(smsCfg, b || {});
+          await store.set("sms-gateway", JSON.stringify(smsCfg));
+          return send(res, 200, publicSmsConfig(smsCfg));
+        }
+        if (pathname === "/api/bridge/ops/sms/send") {
+          if (req.method !== "POST") return send(res, 405, { ok: false, error: "POST only" });
+          await loadSmsConfig();
+          try {
+            await sendGatewaySms(smsCfg, { number: b && b.number, body: b && (b.body != null ? b.body : b.message) });
+            return send(res, 200, { ok: true });
+          } catch (e) {
+            return send(res, 200, { ok: false, error: (e && e.message) || String(e) });
+          }
         }
         if (pathname.startsWith("/api/bridge/pay/")) return send(res, 200, { ok: true });
         if (pathname.startsWith("/api/bridge/ops/")) return send(res, 404, { ok: false, error: "unknown ops api" });

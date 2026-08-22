@@ -204,6 +204,33 @@ test("polling twice refreshes rather than duplicating", async () => {
   assert.equal(d.prepare("SELECT COUNT(*) c FROM customer").get().c, 1);
 });
 
+test("ppp active and bound leases rewrite session_live for the map", async () => {
+  const d = db();
+  const client = fakeClient({
+    "10.0.0.1 /ppp/secret/print": [{ name: "ana", comment: "[bill p=500]" }],
+    "10.0.0.1 /ip/dhcp-server/lease/print": [
+      { "mac-address": "AA:BB:CC:DD:EE:FF", address: "10.0.0.7", status: "bound", comment: "[bill p=750]" },
+    ],
+    "10.0.0.1 /queue/simple/print": [],
+    "10.0.0.1 /ppp/active/print": [{ name: "ana" }],
+  });
+  await pollAll({ db: d, client, routers: [ROUTERS[0]], clock });
+  const names = d.prepare("SELECT name FROM session_live WHERE router_id='r1' ORDER BY name").all().map((r) => r.name);
+  assert.deepEqual(names, ["10.0.0.7", "AA:BB:CC:DD:EE:FF", "ana"]);
+  const calls = [];
+  const again = fakeClient({
+    "10.0.0.1 /ppp/secret/print": [{ name: "ana", comment: "[bill p=500]" }],
+    "10.0.0.1 /ip/dhcp-server/lease/print": [],
+    "10.0.0.1 /queue/simple/print": [],
+    "10.0.0.1 /ppp/active/print": [],
+  }, calls);
+  await pollAll({ db: d, client: again, routers: [ROUTERS[0]], clock });
+  assert.equal(d.prepare("SELECT COUNT(*) c FROM session_live WHERE router_id='r1'").get().c, 0);
+  const active = calls.find((c) => c.cmd === "/ppp/active/print");
+  assert.ok(active);
+  assert.equal(active.attrs[".proplist"], "name");
+});
+
 test("a lease with no MAC is skipped rather than stored under an empty key", async () => {
   const d = db();
   const client = fakeClient({

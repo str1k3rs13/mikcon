@@ -135,7 +135,7 @@ test("migration 2 creates cutoff_state", () => {
 test("the columns and the table arrive together", () => {
   const db = openStore(tmp());
   assert.equal(db.prepare("PRAGMA user_version").get().user_version, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 8);
+  assert.equal(SCHEMA_VERSION, 9);
   const cols = db.prepare("PRAGMA table_info(customer)").all().map((c) => c.name);
   assert.ok(cols.includes("due"), "migration 2's columns are missing");
   assert.ok(tables(db).includes("cutoff_state"), "migration 2's table is missing");
@@ -197,12 +197,26 @@ test("v7 adds receipts, remittance, watchdog, jobs", () => {
 
 test("v8 adds due_remind without a credential column", () => {
   const db = openStore(":memory:");
-  assert.equal(db.prepare("PRAGMA user_version").get().user_version, SCHEMA_VERSION);
-  assert.equal(SCHEMA_VERSION, 8);
+  assert.ok(db.prepare("PRAGMA user_version").get().user_version >= 8);
   const t = tables(db);
   assert.ok(t.includes("due_remind"));
   const cols = db.prepare("PRAGMA table_info(due_remind)").all().map((c) => c.name);
   for (const c of ["router_id", "customer_key", "due", "stage", "at"]) {
+    assert.ok(cols.includes(c), "missing column " + c);
+  }
+  assert.ok(!cols.includes("token"));
+  db.close();
+});
+
+test("v9 adds client_site and session_live without a credential column", () => {
+  const db = openStore(":memory:");
+  assert.equal(db.prepare("PRAGMA user_version").get().user_version, SCHEMA_VERSION);
+  assert.equal(SCHEMA_VERSION, 9);
+  const t = tables(db);
+  assert.ok(t.includes("client_site"));
+  assert.ok(t.includes("session_live"));
+  const cols = db.prepare("PRAGMA table_info(client_site)").all().map((c) => c.name);
+  for (const c of ["nap_port", "drop_port", "lat", "lng"]) {
     assert.ok(cols.includes(c), "missing column " + c);
   }
   assert.ok(!cols.includes("token"));

@@ -1,5 +1,6 @@
 // Runs one due-reminder pass after wallet renew. Pure planner is agent/due-remind.js.
-import { formatRemindTelegram, nextReminder, PASS_CAP } from "../agent/due-remind.js";
+import { formatRemindSms, formatRemindTelegram, nextReminder, PASS_CAP } from "../agent/due-remind.js";
+import { toLocal09 } from "../agent/sms-send.js";
 
 export async function runDueRemindPass({
   customers,
@@ -7,12 +8,15 @@ export async function runDueRemindPass({
   store,
   clock,
   sendAlert,
+  sendSms,
   payUrl,
   esc,
 }) {
   if (!clock || typeof clock.isSane === "function" && !clock.isSane()) return [];
   const today = clock.today();
   const sent = [];
+  const smsFn = typeof sendSms === "function" ? sendSms : null;
+  const tgFn = typeof sendAlert === "function" ? sendAlert : null;
 
   for (const routerId of Object.keys(customers || {})) {
     const rows = customers[routerId] || [];
@@ -30,9 +34,19 @@ export async function runDueRemindPass({
         },
       });
       if (!planned) continue;
-      const text = formatRemindTelegram(planned, { esc, payUrl, site });
-      if (typeof sendAlert === "function") {
-        try { await sendAlert(text); }
+      const phone = toLocal09(planned.phone);
+      if (smsFn && phone) {
+        try {
+          await smsFn({ number: phone, body: formatRemindSms(planned, { payUrl, site }) });
+        } catch {
+          continue;
+        }
+        if (tgFn) {
+          try { await tgFn(formatRemindTelegram(planned, { esc, payUrl, site })); }
+          catch { /* owner telegram is extra once the client was texted */ }
+        }
+      } else if (tgFn) {
+        try { await tgFn(formatRemindTelegram(planned, { esc, payUrl, site })); }
         catch { continue; }
       }
       store.record({

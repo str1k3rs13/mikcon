@@ -1,6 +1,6 @@
 export function injectShim(html) {
   const src = String(html || "");
-  const tag = '<script src="/mikcon-digest.js"></script>\n<script src="/mikcon-server-shim.js"></script>\n<script src="/payment-gateway.js"></script>\n<script src="/ops-desk.js"></script>';
+  const tag = '<script src="/mikcon-digest.js"></script>\n<script src="/mikcon-server-shim.js?v=2"></script>\n<script src="/payment-gateway.js"></script>\n<script src="/ops-desk.js?v=2"></script>\n<script src="/plant-map.js?v=2"></script>\n<script src="/settings-desk.js?v=5"></script>\n<script src="/sms-desk.js?v=1"></script>';
   if (src.includes("mikcon-server-shim.js")) return src;
   if (/<\/head>/i.test(src)) return src.replace(/<\/head>/i, tag + "\n</head>");
   return tag + "\n" + src;

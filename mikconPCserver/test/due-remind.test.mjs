@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { openStore } from "../agent/store.js";
 import {
-  daysUntil, formatRemindTelegram, makeDueRemindStore, nextReminder, PASS_CAP, stageFor,
+  daysUntil, formatRemindSms, formatRemindTelegram, makeDueRemindStore, nextReminder, PASS_CAP, stageFor,
 } from "../agent/due-remind.js";
 import { runDueRemindPass } from "../main/ops-remind.js";
 import { SCHEMA_VERSION } from "../agent/store.js";
@@ -41,6 +41,19 @@ test("nextReminder sends d3 then d1 then due, and stops after pay", () => {
   assert.equal(covered, null);
 });
 
+test("sms copy is plain text for the client", () => {
+  const text = formatRemindSms(
+    { name: "Juan", when: "in 3 days", due: "2026-08-23", amount: 750, plan: "Fibre 20" },
+    { payUrl: "https://pay.example/payment", site: "House" }
+  );
+  assert.match(text, /Bill reminder/);
+  assert.match(text, /Due in 3 days \(2026-08-23\)/);
+  assert.match(text, /₱750/);
+  assert.match(text, /Pay at https:\/\/pay\.example\/payment/);
+  assert.doesNotMatch(text, /<b>/);
+  assert.doesNotMatch(text, /0917/);
+});
+
 test("telegram copy has no em dash and includes pay url", () => {
   const text = formatRemindTelegram(
     { name: "Juan <b>", when: "today", due: "2026-08-20", amount: 750, plan: "Fibre 20", phone: "0917" },
@@ -54,8 +67,8 @@ test("telegram copy has no em dash and includes pay url", () => {
   assert.doesNotMatch(text, /—/);
 });
 
-test("store records once per due+stage and SCHEMA is 8", () => {
-  assert.equal(SCHEMA_VERSION, 8);
+test("store records once per due+stage and SCHEMA is current", () => {
+  assert.ok(SCHEMA_VERSION >= 8);
   const db = openStore(":memory:");
   assert.ok(db.prepare("SELECT name FROM sqlite_master WHERE name='due_remind'").get());
   const store = makeDueRemindStore(db);
@@ -122,5 +135,56 @@ test("failed telegram is retried and pass cap is 40", async () => {
   });
   assert.equal(ok.length, 1);
   assert.equal(PASS_CAP, 40);
+  db.close();
+});
+
+test("client SMS is recorded and a failed SMS is retried", async () => {
+  const db = openStore(":memory:");
+  const store = makeDueRemindStore(db);
+  const sms = [];
+  const tg = [];
+  const clock = { today: () => "2026-08-20", isSane: () => true };
+  let boom = true;
+  await runDueRemindPass({
+    customers: { r1: [{ ...juan }] }, store, clock,
+    sendAlert: async (t) => tg.push(t),
+    sendSms: async (m) => { if (boom) throw new Error("dongle down"); sms.push(m); },
+  });
+  assert.equal(sms.length, 0);
+  assert.equal(tg.length, 0);
+  assert.equal(store.has("r1", "juan01", "2026-08-23", "d3"), false);
+  boom = false;
+  const ok = await runDueRemindPass({
+    customers: { r1: [{ ...juan }] }, names: { r1: "House" }, store, clock,
+    sendAlert: async (t) => tg.push(t),
+    sendSms: async (m) => sms.push(m),
+    payUrl: "http://pay.local/payment",
+    esc,
+  });
+  assert.equal(ok.length, 1);
+  assert.equal(sms.length, 1);
+  assert.equal(sms[0].number, "09171234567");
+  assert.match(sms[0].body, /in 3 days/);
+  assert.match(sms[0].body, /http:\/\/pay\.local\/payment/);
+  assert.equal(tg.length, 1);
+  assert.match(tg[0], /<b>Bill reminder<\/b>/);
+  db.close();
+});
+
+test("no mobile number still telegrams the owner", async () => {
+  const db = openStore(":memory:");
+  const store = makeDueRemindStore(db);
+  const sms = [];
+  const tg = [];
+  await runDueRemindPass({
+    customers: { r1: [{ ...juan, phone: "" }] }, store,
+    clock: { today: () => "2026-08-20", isSane: () => true },
+    sendAlert: async (t) => tg.push(t),
+    sendSms: async (m) => sms.push(m),
+    esc,
+  });
+  assert.equal(sms.length, 0);
+  assert.equal(tg.length, 1);
+  assert.equal(store.has("r1", "juan01", "2026-08-23", "d3"), true);
   db.close();
 });

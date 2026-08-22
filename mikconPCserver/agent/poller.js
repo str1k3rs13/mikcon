@@ -19,6 +19,37 @@ import { billableFrom } from "./billing.js";
 // reads it, and dropping it would make every queue look static.
 export const QUEUE_FIELDS = [".id", "name", "target", "max-limit", "comment", "dynamic"];
 
+export function replaceSessionLive(db, routerId, names, seenAt) {
+  const rid = String(routerId || "");
+  db.prepare("DELETE FROM session_live WHERE router_id = ?").run(rid);
+  const ins = db.prepare("INSERT OR REPLACE INTO session_live (router_id, name, seen_at) VALUES (?,?,?)");
+  const seen = new Set();
+  for (const raw of names || []) {
+    const name = String(raw || "").trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    ins.run(rid, name, String(seenAt || ""));
+  }
+}
+
+function liveNamesFrom({ activePpp, leases }) {
+  const names = [];
+  for (const row of activePpp || []) {
+    const n = String((row && row.name) || "").trim();
+    if (n) names.push(n);
+  }
+  for (const lease of leases || []) {
+    const mac = String((lease && lease["mac-address"]) || "").trim();
+    const st = String((lease && lease.status) || "").toLowerCase();
+    const addr = String((lease && lease.address) || "").trim();
+    const live = st === "bound" || (!st && !!(mac || addr));
+    if (!live) continue;
+    if (mac) names.push(mac);
+    if (addr) names.push(addr);
+  }
+  return names;
+}
+
 export async function pollRouter({ db, client, router, clock }) {
   const today = clock.today();
   const call = (cmd, attrs) => client({
@@ -32,6 +63,16 @@ export async function pollRouter({ db, client, router, clock }) {
   const secrets = await call("/ppp/secret/print");
   const leases = await call("/ip/dhcp-server/lease/print");
   const queues = await call("/queue/simple/print", { ".proplist": QUEUE_FIELDS.join(",") });
+
+  // Live sessions are optional: a user who can print secrets but not /ppp/active must still
+  // refresh the billing cache. Failures leave the previous snapshot in place.
+  let activePpp = [];
+  let liveOk = true;
+  try {
+    activePpp = await call("/ppp/active/print", { ".proplist": "name" });
+  } catch {
+    liveOk = false;
+  }
 
   const upsert = db.prepare(`
     INSERT INTO customer (router_id,kind,key,raw_comment,last_seen,src,name,phone,plan,price,cycle,due,paid,bal,wallet)
@@ -55,6 +96,7 @@ export async function pollRouter({ db, client, router, clock }) {
     upsert.run(router.id, c.kind, c.key, c.raw_comment, today, c.src,
                c.name, c.phone, c.plan, c.price, c.cycle, c.due, c.paid, c.bal, c.wallet);
   }
+  if (liveOk) replaceSessionLive(db, router.id, liveNamesFrom({ activePpp, leases }), today);
   return rows;
 }
 

@@ -5,7 +5,7 @@
 // asserts no column is even named like one.
 import { DatabaseSync } from "node:sqlite";
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 // Append-only. To change the schema, add a function; never edit one that has shipped, because
 // an operator's database has already run it.
@@ -300,6 +300,34 @@ const MIGRATIONS = [
       UNIQUE (router_id, customer_key, due, stage)
     );
     CREATE INDEX due_remind_by_day ON due_remind (at, id DESC);
+  `),
+
+  // -> version 9
+  // WISP plant map: one pin per billed client, plus the last PPP/IPoE session snapshot.
+  // Location and NAP/drop ports are operator-entered; they are not on the router.
+  // session_live is a cache of /ppp/active and bound DHCP leases, rewritten each poll.
+  (db) => db.exec(`
+    CREATE TABLE client_site (
+      router_id     TEXT NOT NULL,
+      customer_key  TEXT NOT NULL,
+      name          TEXT,
+      nap_name      TEXT,
+      nap_port      TEXT,
+      drop_port     TEXT,
+      lat           REAL,
+      lng           REAL,
+      note          TEXT,
+      updated_at    TEXT NOT NULL,
+      PRIMARY KEY (router_id, customer_key)
+    );
+    CREATE INDEX client_site_by_nap ON client_site (router_id, nap_name, nap_port);
+
+    CREATE TABLE session_live (
+      router_id  TEXT NOT NULL,
+      name       TEXT NOT NULL,
+      seen_at    TEXT NOT NULL,
+      PRIMARY KEY (router_id, name)
+    );
   `),
 ];
 

@@ -52,7 +52,18 @@
     },
     share: function () { return Promise.reject(new Error("share unavailable on desktop")); },
     installUpdate: function () { return Promise.reject(new Error("Use npm on this PC to update the server.")); },
-    onUpdateProgress: function () {}
+    onUpdateProgress: function () {},
+    smsInfo: function () { return get("/api/bridge/ops/sms/status"); },
+    sendSms: function (o) { return call("/api/bridge/ops/sms/send", o || {}); },
+    requestSmsPermission: function () {
+      return get("/api/bridge/ops/sms/status").then(function (r) {
+        return { hasPermission: !!(r && r.hasPermission), sims: (r && r.sims) || [] };
+      });
+    },
+    smsReady: function () { return get("/api/bridge/ops/sms/status"); },
+    getSmsConfig: function () { return get("/api/bridge/ops/sms/status"); },
+    setSmsConfig: function (o) { return call("/api/bridge/ops/sms/config", o || {}); },
+    listSmsPorts: function () { return get("/api/bridge/ops/sms/ports"); }
   };
   var CapacitorHttp = {
     request: function (o) { return call("/api/bridge/http", o || {}); }
@@ -76,11 +87,41 @@
     advanceJob: function (o) { return call("/api/bridge/ops/jobAdvance", o || {}); },
     closeJob: function (o) { return call("/api/bridge/ops/jobClose", o || {}); },
     getWatchdog: function () { return get("/api/bridge/ops/watchdog"); },
-    listReminders: function () { return get("/api/bridge/ops/reminders"); }
+    listReminders: function () { return get("/api/bridge/ops/reminders"); },
+    listSites: function (o) {
+      var q = (o && o.router_id) ? ("?router_id=" + encodeURIComponent(o.router_id)) : "";
+      return get("/api/bridge/ops/sites" + q);
+    },
+    saveSite: function (o) { return call("/api/bridge/ops/sites", o || {}); },
+    deleteSite: function (o) { return call("/api/bridge/ops/sites/delete", o || {}); }
   };
   window.Capacitor = {
     isNativePlatform: function () { return true; },
     getPlatform: function () { return "electron"; },
     Plugins: { RouterApi: RouterApi, AppTools: AppTools, CapacitorHttp: CapacitorHttp, PayReminder: PayReminder }
+  };
+  // Extra tabs are not in the original VIEWS list, so staff records never named them.
+  // Owner (or anyone who can open Routers) sees all of them. Cashier with SMS sees
+  // Settings → SMS only. Technician with Clients sees Jobs and Map.
+  window.pcCanOpen = function (view) {
+    var session = null;
+    try { session = window._session; } catch (e) {}
+    if (!session) return true;
+    var role = String(session.role || "").toLowerCase();
+    if (role === "owner") role = "admin";
+    if (role === "admin") return true;
+    var panels = session.panels || [];
+    function has(id) {
+      for (var i = 0; i < panels.length; i++) {
+        if (String(panels[i]) === id) return true;
+      }
+      return false;
+    }
+    if (has("routers")) return true;
+    var v = String(view || "");
+    if (v === "jobs" || v === "map") return has("pppoe");
+    if (v === "sms" || v === "settings") return has("sms");
+    if (v === "biz" || v === "pair" || v === "staff") return false;
+    return false;
   };
 })();

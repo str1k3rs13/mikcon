@@ -33,6 +33,8 @@ Then open the printed URL, for example:
 - `http://192.168.x.x:8787` from a phone on the same Wi-Fi
 - Tailscale / Cloudflare URLs if you turned those on
 
+In the browser: **Map** pins billed PPPoE and IPoE clients (NAP port, house port, active/expired). **Settings** holds business name, SMS, pairing, and staff. Notices and due-day reminders send from this PC through Semaphore or a USB GSM dongle. A cashier PIN only opens SMS; pairing and staff stay with the owner.
+
 First start: sign in with **1234**, then set a new password (confirm and save). Reset later with:
 
 ```

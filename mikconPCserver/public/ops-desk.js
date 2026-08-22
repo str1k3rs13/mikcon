@@ -49,6 +49,22 @@
     nav.appendChild(tab);
     paint(tab);
 
+    function canOpen(view) {
+      if (typeof window.pcCanOpen !== "function") return true;
+      return !!window.pcCanOpen(view);
+    }
+    function paintPerms() {
+      tab.classList.toggle("hide", !canOpen("jobs"));
+    }
+    paintPerms();
+    if (typeof window.applyPanelPerms === "function") {
+      var origPerms = window.applyPanelPerms;
+      window.applyPanelPerms = function () {
+        origPerms.apply(this, arguments);
+        paintPerms();
+      };
+    }
+
     var view = document.createElement("section");
     view.id = "view-jobs";
     view.className = "hide";
@@ -74,7 +90,7 @@
       var rem = document.createElement("div");
       rem.className = "card";
       rem.id = "ops-remind-card";
-      rem.innerHTML = '<h2><span data-icon="phone"></span>Due reminders</h2><div class="sub">Telegram 3 days before, 1 day before, and on the due date. Stops after they pay. Cut-off still handles overdue.</div><div id="ops-remind"></div>';
+      rem.innerHTML = '<h2><span data-icon="phone"></span>Due reminders</h2><div class="sub">SMS to the client 3 days before, 1 day before, and on the due date when Semaphore or a USB dongle is set. The owner still gets Telegram. Stops after they pay. Cut-off still handles overdue.</div><div id="ops-remind"></div>';
       status.insertBefore(rem, status.firstChild);
       var w = document.createElement("div");
       w.className = "card";
@@ -205,7 +221,11 @@
       view.classList.add("hide");
       tab.classList.remove("on");
       if (v === "jobs") {
-        ["status", "routers", "vouchers", "users", "pppoe", "vendos", "sales", "sms"].forEach(function (x) {
+        if (!canOpen("jobs")) {
+          if (typeof window.toast === "function") window.toast("Your account cannot open that screen.", "bad");
+          return;
+        }
+        ["status", "routers", "vouchers", "users", "pppoe", "vendos", "sales", "sms", "map", "settings"].forEach(function (x) {
           var pane = $("view-" + x);
           var t = $("tab-" + x);
           if (pane) pane.classList.add("hide");
@@ -213,6 +233,7 @@
         });
         view.classList.remove("hide");
         tab.classList.add("on");
+        try { window.CUR_VIEW = "jobs"; } catch (e) {}
         if (window.stopStatus) window.stopStatus();
         loadJobs();
         return;

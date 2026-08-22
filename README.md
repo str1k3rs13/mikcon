@@ -50,6 +50,8 @@ git clone https://github.com/str1k3rs13/mikcon.git; Set-Location mikcon\mikconPC
 
 Leave that window open. Open the printed URL.
 
+In the browser: **Map** for client location, NAP port, and house port; **Settings** for business name, SMS, pairing, and staff. SMS notices and due-day reminders send from this PC through Semaphore or a USB GSM dongle.
+
 ---
 
 ## Raspberry Pi and Orange Pi (Balena Etcher)

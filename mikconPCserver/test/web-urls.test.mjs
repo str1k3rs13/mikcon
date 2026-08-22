@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isTailscaleIPv4, lanIPv4s, listenUrls, formatListenBanner } from "../main/web-urls.js";
 import { injectShim, LOGIN_PAGE } from "../main/web-html.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseCloudflareUrl, parseTailscaleIPs } from "../main/web-tunnels.js";
 import { hashPassword, checkPassword, generatePassword, makeLoginGuard, MAX_PASSWORD_CHARS, loadOrCreatePassword, validateNewPassword, DEFAULT_PASSWORD, savePassword } from "../main/web-auth.js";
 import { safeJoin } from "../main/web-server.js";
@@ -53,7 +55,81 @@ test("injectShim inserts the bridge script once", () => {
   assert.match(once, /mikcon-server-shim\.js/);
   assert.match(once, /payment-gateway\.js/);
   assert.match(once, /ops-desk\.js/);
+  assert.match(once, /plant-map\.js/);
+  assert.match(once, /settings-desk\.js/);
+  assert.match(once, /sms-desk\.js/);
   assert.equal(injectShim(once), once);
+});
+
+test("PC SMS shim exposes smsInfo and sendSms for notices", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(here, "..", "public", "mikcon-server-shim.js"), "utf8");
+  assert.match(src, /smsInfo/);
+  assert.match(src, /sendSms/);
+  assert.match(src, /\/api\/bridge\/ops\/sms\/status/);
+  assert.match(src, /\/api\/bridge\/ops\/sms\/send/);
+});
+
+test("extra tabs follow staff: cashier SMS only, technician Jobs and Map", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const shim = readFileSync(path.join(here, "..", "public", "mikcon-server-shim.js"), "utf8");
+  assert.match(shim, /window\.pcCanOpen/);
+  assert.match(shim, /has\("pppoe"\)/);
+  assert.match(shim, /has\("sms"\)/);
+  const settings = readFileSync(path.join(here, "..", "public", "settings-desk.js"), "utf8");
+  assert.match(settings, /pcCanOpen/);
+  assert.match(settings, /firstSettings/);
+  assert.match(settings, /tab-jobs/);
+  const jobs = readFileSync(path.join(here, "..", "public", "ops-desk.js"), "utf8");
+  assert.match(jobs, /canOpen\("jobs"\)/);
+  const map = readFileSync(path.join(here, "..", "public", "plant-map.js"), "utf8");
+  assert.match(map, /canOpen\("map"\)/);
+});
+
+test("SMS desk covers Semaphore, USB dongle, PPPoE and IPoE notices", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(here, "..", "public", "sms-desk.js"), "utf8");
+  assert.match(src, /Semaphore/);
+  assert.match(src, /USB GSM dongle/);
+  assert.match(src, /data-kind=\\"ppp\\"/);
+  assert.match(src, /data-kind=\\"ipoe\\"/);
+  assert.match(src, /sms-gateway-card/);
+  assert.match(src, /setSmsConfig/);
+});
+
+test("settings extra tab uses a dropdown for business, SMS, pairing and staff", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(here, "..", "public", "settings-desk.js"), "utf8");
+  assert.match(src, /tab-settings/);
+  assert.match(src, /settings-menu/);
+  assert.match(src, /Business name/);
+  assert.match(src, /data-set="sms"/);
+  assert.match(src, /Device pairing/);
+  assert.match(src, /Add staff/);
+  assert.match(src, /biz-card/);
+  assert.match(src, /staff-list/);
+  assert.match(src, /st-pack/);
+  assert.match(src, /view-sms/);
+});
+
+test("plant-map extra tab covers location, status, NAP port and plugin port", () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(path.join(here, "..", "public", "plant-map.js"), "utf8");
+  assert.match(src, /tab-map/);
+  assert.match(src, /go\("map"\)/);
+  assert.match(src, /Billed client/);
+  assert.match(src, /Port on the box/);
+  assert.match(src, /Port at the house/);
+  assert.match(src, /Pin on map/);
+  assert.match(src, /Type numbers/);
+  assert.match(src, /site-lat/);
+  assert.match(src, /\/leaflet\/leaflet\.js/);
+  assert.match(src, /\/map-tiles\//);
+  assert.doesNotMatch(src, /unpkg\.com/);
+  assert.match(src, /<select id="site-key">/);
+  assert.match(src, /isolation:isolate/);
+  assert.match(src, /grid-template-columns:300px minmax\(0,1fr\)/);
+  assert.match(src, /coord-row/);
 });
 
 test("parseCloudflareUrl and tailscale ips from CLI text", () => {
