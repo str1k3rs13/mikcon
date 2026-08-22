@@ -1,6 +1,6 @@
 {
   "name": "mikcon-pc-server",
-  "version": "3.16.13",
+  "version": "3.16.14",
   "description": "MikconPC Server — always-on web controller for Windows and Linux.",
   "private": true,
   "type": "module",

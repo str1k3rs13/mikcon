@@ -526,7 +526,7 @@ export function startHttpServer({
         }
         try {
           const r = await fetch("https://tile.openstreetmap.org/" + z + "/" + x + "/" + y + ".png", {
-            headers: { "User-Agent": "MikconPC-Server/3.16.13 (WISP map)" },
+            headers: { "User-Agent": "MikconPC-Server/3.16.14 (WISP map)" },
           });
           if (!r.ok) return send(res, r.status, "tile error", { "Content-Type": "text/plain" });
           const buf = Buffer.from(await r.arrayBuffer());

@@ -6,8 +6,8 @@ Works on **Windows**, **Linux**, **Raspberry Pi**, and **Orange Pi**.
 
 | File | What it is |
 |---|---|
-| [MIKCON-3.16.13.apk](releases/MIKCON-3.16.13.apk) | Android app |
-| Windows `.exe` | PC installer — on the [Releases](https://github.com/str1k3rs13/mikcon/releases) page |
+| [MIKCON-3.16.13.apk](releases/MIKCON-3.16.13.apk) | Android app (unchanged; existing keys stay valid) |
+| Windows `.exe` | PC installer **3.16.14** — on the [Releases](https://github.com/str1k3rs13/mikcon/releases) page |
 
 ---
 
